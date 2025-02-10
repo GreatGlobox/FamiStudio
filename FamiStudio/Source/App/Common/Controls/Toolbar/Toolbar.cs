@@ -836,6 +836,13 @@ namespace FamiStudio
             MarkDirty();
         }
 
+        private void RecreateAllControls()
+        {
+            RemoveAllControls();
+            allButtons.Clear();
+            OnAddedToContainer();
+        }
+
         public override bool HitTest(int winX, int winY)
         {
             // Eat all the input when expanded.
@@ -880,9 +887,12 @@ namespace FamiStudio
             }
         }
 
-        public void Reset()
+        public void Reset(bool recreateControls = false)
         {
             tooltipLabel.ToolTip = "";
+            
+            if (recreateControls)
+                RecreateAllControls();
         }
 
         private void StartClosing()

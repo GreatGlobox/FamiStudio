@@ -333,7 +333,7 @@ namespace FamiStudio
             return bmp;
         }
 
-        private void BuildTextureAtlases()
+        public void BuildTextureAtlases()
         {
             // Build atlases.
             var assembly = Assembly.GetExecutingAssembly();
@@ -389,6 +389,12 @@ namespace FamiStudio
             }
 
             builtAtlases = true;
+        }
+
+        public void RebuildTextureAtlases()
+        {
+            atlases.Clear();
+            BuildTextureAtlases();
         }
 
         public TextureAtlasRef GetTextureAtlasRef(string name)

@@ -76,6 +76,11 @@ namespace FamiStudio
             fontCollections[0] = g.CreateFontCollectionFromResource(FontListRegular);
             fontCollections[1] = g.CreateFontCollectionFromResource(FontListBold);
 
+            UpdateFontScaling(g);
+        }
+
+        public void UpdateFontScaling(Graphics g)
+        {
             for (int i = 0; i < FontDefinitions.Length; i++)
             {
                 var bold = FontDefinitions[i].Bold;
