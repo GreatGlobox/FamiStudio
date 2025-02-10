@@ -411,16 +411,16 @@ namespace FamiStudio
             RefreshLayout();
         }
 
-        private void WindowContentScaleCallback(IntPtr window, float xscale, float yscale)
+        private void WindowContentScaleCallback(IntPtr window, float xscale, float _)
         {
-            Debug.WriteLine($"*** Content scale changed: xscale={xscale}, yscale={yscale}");
+            Debug.WriteLine($"*** Content scale changed: {xscale}");
 
             if (isWayland)
             {
                 InitializeGL();
                 RefreshLayout();
                 graphics.RebuildTextureAtlases();
-                fonts.UpdateFontScaling(graphics); 
+                fonts.UpdateFontScaling(graphics);
                 ProjectExplorer.Reset();
                 ToolBar.Reset(true);
             }
