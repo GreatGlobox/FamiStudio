@@ -415,15 +415,12 @@ namespace FamiStudio
         {
             Debug.WriteLine($"*** Content scale changed: {xscale}");
 
-            if (isWayland)
-            {
-                InitializeGL();
-                RefreshLayout();
-                graphics.RebuildTextureAtlases();
-                fonts.UpdateFontScaling(graphics);
-                ProjectExplorer.Reset();
-                ToolBar.Reset(true);
-            }
+            InitializeGL();
+            RefreshLayout();
+            graphics.RebuildTextureAtlases();
+            fonts.UpdateFontScaling(graphics);
+            ProjectExplorer.Reset();
+            ToolBar.Reset(true);
         }
 
         private void WindowCloseCallback(IntPtr window)
