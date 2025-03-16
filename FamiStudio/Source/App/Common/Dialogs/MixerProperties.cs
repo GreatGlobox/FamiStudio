@@ -111,14 +111,17 @@ namespace FamiStudio
                         { VolumeLabel.ToString(), (int)(mixerSetting.VolumeDb * 10) },
                         { TrebleLabel.ToString(), (int)(mixerSetting.TrebleDb * 10) },
                         { TrebleFreqLabel.ToString(), (int)(mixerSetting.TrebleRolloffHz / 100) },
+                        { BassFilterLabel.ToString(), (int)(mixerSetting.BassCutoffHz) },
                     },
-                    3, ExpansionGridTooltip, GridOptions.NoHeader | GridOptions.MobileTwoColumnLayout);
+                    4, ExpansionGridTooltip, GridOptions.NoHeader | GridOptions.MobileTwoColumnLayout);
 
                 props.OverrideCellSlider(chipGridIndices[i], 0, 1, -100, 100, (o) => FormattableString.Invariant($"{(int)o / 10.0:F1} dB"));
                 props.OverrideCellSlider(chipGridIndices[i], 1, 1, -1000, 50, (o) => FormattableString.Invariant($"{(int)o / 10.0:F1} dB"));
                 props.OverrideCellSlider(chipGridIndices[i], 2, 1, 1, 441, (o) => FormattableString.Invariant($"{(int)o * 100} Hz"));
+                props.OverrideCellSlider(chipGridIndices[i], 3, 1, 2, 100, (o) => FormattableString.Invariant($"{(int)o} Hz"));
                 props.SetPropertyEnabled(chipGridIndices[i], project == null || overridden);
                 props.SetPropertyEnabled(chipGridIndices[i], 1, 1, i != ExpansionType.Fds); // No cutoff on special FDS filter.
+                props.SetPropertyEnabled(chipGridIndices[i], 3, 1, i == ExpansionType.Fds); // Only FDS has bass filter for now.
             }
 
             if (projectSettings)
@@ -177,6 +180,7 @@ namespace FamiStudio
                 props.SetPropertyValue(chipGridIndices[i], 0, 1, (int)(def.VolumeDb * 10));
                 props.SetPropertyValue(chipGridIndices[i], 1, 1, (int)(def.TrebleDb * 10));
                 props.SetPropertyValue(chipGridIndices[i], 2, 1, def.TrebleRolloffHz / 100);
+                props.SetPropertyValue(chipGridIndices[i], 3, 1, def.BassCutoffHz);
             }
         }
 
@@ -233,6 +237,7 @@ namespace FamiStudio
                     target[i].VolumeDb = props.GetPropertyValue<int>(chipGridIndices[i], 0, 1) / 10.0f;
                     target[i].TrebleDb = props.GetPropertyValue<int>(chipGridIndices[i], 1, 1) / 10.0f;
                     target[i].TrebleRolloffHz = props.GetPropertyValue<int>(chipGridIndices[i], 2, 1) * 100;
+                    target[i].BassCutoffHz = props.GetPropertyValue<int>(chipGridIndices[i], 3, 1);
                 }
                 else
                 {

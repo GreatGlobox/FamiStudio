@@ -2783,17 +2783,19 @@ namespace FamiStudio
 
     public struct ExpansionMixer
     {
-        public ExpansionMixer(float v, float t, int rf)
+        public ExpansionMixer(float v, float t, int rf, int b = 8)
         {
             VolumeDb = v;
             TrebleDb = t;
             TrebleRolloffHz = rf;
+            BassCutoffHz = b;
         }
 
         public bool Override;
         public float VolumeDb;
         public float TrebleDb;
         public int TrebleRolloffHz;
+        public int BassCutoffHz;
 
         public void Serialize(ProjectBuffer buffer)
         {
@@ -2801,18 +2803,19 @@ namespace FamiStudio
             buffer.Serialize(ref VolumeDb);
             buffer.Serialize(ref TrebleDb);
             buffer.Serialize(ref TrebleRolloffHz);
+            buffer.Serialize(ref BassCutoffHz);
         }
 
         public static readonly ExpansionMixer[] DefaultExpansionMixerSettings = new ExpansionMixer[ExpansionType.Count]
         {
-            new ExpansionMixer(0.0f,  -5.0f, 14000), // None
-            new ExpansionMixer(0.0f,  -5.0f, 14000), // Vrc6
-            new ExpansionMixer(0.0f, -15.0f, 14000), // Vrc7
-            new ExpansionMixer(0.0f,   0.0f,  2000), // Fds
-            new ExpansionMixer(0.0f,  -5.0f, 14000), // Mmc5
-            new ExpansionMixer(0.0f, -15.0f, 14000), // N163
-            new ExpansionMixer(0.0f,  -5.0f, 14000), // S5B
-            new ExpansionMixer(0.0f,  -5.0f, 14000)  // EPSM
+            new ExpansionMixer(0.0f,  -5.0f, 14000, 0), // None
+            new ExpansionMixer(0.0f,  -5.0f, 14000, 0), // Vrc6
+            new ExpansionMixer(0.0f, -15.0f, 14000, 0), // Vrc7
+            new ExpansionMixer(0.0f,   0.0f,  2000, 8), // Fds
+            new ExpansionMixer(0.0f,  -5.0f, 14000, 0), // Mmc5
+            new ExpansionMixer(0.0f, -15.0f, 14000, 0), // N163
+            new ExpansionMixer(0.0f,  -5.0f, 14000, 0), // S5B
+            new ExpansionMixer(0.0f,  -5.0f, 14000, 0)  // EPSM
         };
     }
 }

@@ -514,7 +514,7 @@ namespace FamiStudio
 
             // Mixer.
             GlobalVolumeDb = ini.GetFloat("Mixer", "GlobalVolume", -3.0f);
-            BassCutoffHz = ini.GetInt("Mixer", "BassCutoffHz", 16);
+            BassCutoffHz = ini.GetInt("Mixer", "BassCutoffHz", 24);
 
             Array.Copy(ExpansionMixer.DefaultExpansionMixerSettings, ExpansionMixerSettings, ExpansionMixerSettings.Length);
 
@@ -528,6 +528,7 @@ namespace FamiStudio
                     ExpansionMixerSettings[i].VolumeDb        = ini.GetFloat(section, "VolumeDb",      ExpansionMixer.DefaultExpansionMixerSettings[i].VolumeDb);
                     ExpansionMixerSettings[i].TrebleDb        = ini.GetFloat(section, "TrebleDb",      ExpansionMixer.DefaultExpansionMixerSettings[i].TrebleDb);
                     ExpansionMixerSettings[i].TrebleRolloffHz = ini.GetInt(section, "TrebleRolloffHz", ExpansionMixer.DefaultExpansionMixerSettings[i].TrebleRolloffHz);
+                    ExpansionMixerSettings[i].BassCutoffHz    = ini.GetInt(section, "BassCutoffHz",    ExpansionMixer.DefaultExpansionMixerSettings[i].BassCutoffHz);
                 }
             }
 
@@ -707,6 +708,7 @@ namespace FamiStudio
                 ini.SetFloat(section, "VolumeDb", ExpansionMixerSettings[i].VolumeDb);
                 ini.SetFloat(section, "TrebleDb", ExpansionMixerSettings[i].TrebleDb);
                 ini.SetFloat(section, "TrebleRolloffHz", ExpansionMixerSettings[i].TrebleRolloffHz);
+                ini.SetFloat(section, "BassCutoffHz", ExpansionMixerSettings[i].BassCutoffHz);
             }
 
             // MIDI

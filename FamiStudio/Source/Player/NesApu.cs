@@ -41,6 +41,8 @@ namespace FamiStudio
         public extern static int IsSeeking(int apuIdx);
         [DllImport(NesSndEmuDll, CallingConvention = CallingConvention.StdCall, EntryPoint = "NesApuTrebleEq")]
         public extern static void TrebleEq(int apuIdx, int expansion, double treble, int trebleFreq, int sample_rate);
+        [DllImport(NesSndEmuDll, CallingConvention = CallingConvention.StdCall, EntryPoint = "NesApuBassCutoff")]
+        public extern static void BassCutoff(int apuIdx, int expansion, int bass);
         [DllImport(NesSndEmuDll, CallingConvention = CallingConvention.StdCall, EntryPoint = "NesApuGetAudioExpansions")]
         public extern static int GetAudioExpansions(int apuIdx);
         [DllImport(NesSndEmuDll, CallingConvention = CallingConvention.StdCall, EntryPoint = "NesApuSetExpansionVolume")]
@@ -919,6 +921,10 @@ namespace FamiStudio
                         var expSettings = expMixerSettings[expansion];
                         TrebleEq(apuIdx, expansion, expSettings.TrebleDb, expSettings.TrebleRolloffHz, sampleRate);
                         SetExpansionVolume(apuIdx, expansion, Utils.DbToAmplitude(expSettings.VolumeDb + globalVolumeDb));
+                        if (expansion == APU_EXPANSION_FDS)
+                        {
+                            BassCutoff(apuIdx, APU_EXPANSION_FDS, expSettings.BassCutoffHz);
+                        }
                     }
                 }
 

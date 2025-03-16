@@ -20,7 +20,7 @@ extern "C" int __stdcall NesApuInit(int apuIdx, int sampleRate, int bass_freq, i
 
 	apu[apuIdx].set_audio_expansions(expansions);
 	apu[apuIdx].dmc_reader(dmcReadFunc, (void*)apuIdx);
-	apu[apuIdx].bass_freq(bass_freq);
+	apu[apuIdx].bass_freq(0, bass_freq);
 
 	return 0;
 }
@@ -93,6 +93,11 @@ extern "C" int __stdcall NesApuGetAudioExpansions(int apuIdx)
 extern "C" void __stdcall NesApuSetExpansionVolume(int apuIdx, int expansion, double volume)
 {
 	apu[apuIdx].set_expansion_volume(expansion, volume);
+}
+
+extern "C" void __stdcall NesApuBassCutoff(int apuIdx, int expansion, int bass_freq)
+{
+	apu[apuIdx].bass_freq(expansion, bass_freq);
 }
 
 extern "C" int __stdcall NesApuSkipCycles(int apuIdx, int cycles)
