@@ -36,8 +36,10 @@ namespace FamiStudio
         public int Height => GetWindowSizeInternal().Height;
         public string Text { set => glfwSetWindowTitle(window, value); }
         public bool IsLandscape => true;
+        public bool IsWindowInFocus => glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE;
         public bool IsAsyncDialogInProgress => container.IsDialogActive;
         public bool IsContextMenuActive => container.IsContextMenuActive;
+        public bool IsWayland => isWayland;
         public bool IsOutOfProcessDialogInProgress => Platform.IsOutOfProcessDialogInProgress();
         public bool MobilePianoVisible { get => false; set => value = false; }
         public Point LastMousePosition => new Point(lastCursorX, lastCursorY);
@@ -425,7 +427,7 @@ namespace FamiStudio
 
         private void WindowCloseCallback(IntPtr window)
         {
-            if (IsAsyncDialogInProgress || IsOutOfProcessDialogInProgress)
+            if (IsAsyncDialogInProgress)
             {
                 Platform.Beep();
                 return;
@@ -453,12 +455,15 @@ namespace FamiStudio
         private void WindowRefreshCallback(IntPtr window)
         {
             Debug.WriteLine($"WINDOW REFRESH!");
-            MarkDirty();
+            if (IsOutOfProcessDialogInProgress) 
+                RenderFrameAndSwapBuffer(); // Prevent the window from turning invisible.
+            else
+                MarkDirty();
         }
 
         private void MouseButtonCallback(IntPtr window, int button, int action, int mods)
         {
-            if (quit || IsOutOfProcessDialogInProgress)
+            if (quit)
                 return;
             
             Debug.WriteLine($"BUTTON! Button={button}, Action={action}, Mods={mods}");
@@ -470,42 +475,40 @@ namespace FamiStudio
                 if (captureControl != null)
                     return;
 
-                // Abort delayed right-click if left-clicking, to avoid a double capture.
-                if (button == GLFW_MOUSE_BUTTON_LEFT)
-                    ClearDelayedRightClick();
-
                 var ctrl = container.GetControlAt(lastCursorX, lastCursorY, out int cx, out int cy);
-                var ctrlIsValid = ctrl != null;
                 container.ConditionalHideContextMenu(ctrl);
 
                 lastButtonPress = button; 
 
-                // Multi-click emulation. 
+                // Double click emulation.
                 var now = glfwGetTime();
                 var delay = now - lastClickTime;
 
-                var multiClick = delay <= Platform.DoubleClickTime &&
+                var doubleClick = 
+                    button == lastClickButton &&
+                    delay <= Platform.DoubleClickTime &&
                     Math.Abs(lastClickX - lastCursorX) < 4 &&
                     Math.Abs(lastClickY - lastCursorY) < 4;
 
-                var doubleClick = multiClick && lastClickButton == button;
-
-                if (!doubleClick) 
+                if (doubleClick)
                 {
+                    lastClickButton = -1;
+                }
+                else
+                {
+                    lastClickButton = button;
+                    lastClickTime = now;
                     lastClickX = lastCursorX;
                     lastClickY = lastCursorY;
                 }
 
-                lastClickButton = doubleClick ? -1 : button;
-                lastClickTime = now;
-
-                if (ctrlIsValid)
+                if (ctrl != null)
                 {
                     SetActiveControl(ctrl);
 
                     if (doubleClick)
                     {
-                        // We only support left-click for multi-clicks.
+                        // We dont support anything other and double-left click.
                         if (button == GLFW_MOUSE_BUTTON_LEFT)
                         {
                             Debug.WriteLine($"DOUBLE CLICK!");
@@ -683,25 +686,15 @@ namespace FamiStudio
         
         private void SendKeyUpOrDown(Control ctrl, KeyEventArgs e, bool down)
         {
-            if (IsContextMenuActive)
-            {
-                if (down)
-                    container.ContextMenu.SendKeyDown(e);
-                else
-                    container.ContextMenu.SendKeyUp(e);
-            }
+            if (down)
+                ctrl.SendKeyDown(e);
             else
-            {
-                if (down)
-                    ctrl.SendKeyDown(e);
-                else
-                    ctrl.SendKeyUp(e);
-            }
+                ctrl.SendKeyUp(e);
         }
 
         private void KeyCallback(IntPtr window, int key, int scancode, int action, int mods)
         {
-            if (quit || IsOutOfProcessDialogInProgress)
+            if (quit)
                 return;
 
             mods = FixKeyboardMods(mods, key, action);
@@ -730,7 +723,7 @@ namespace FamiStudio
 
         private void CharCallback(IntPtr window, uint codepoint)
         {
-            if (quit || IsOutOfProcessDialogInProgress)
+            if (quit)
                 return;
 
             //Debug.WriteLine($"CHAR! Key = {codepoint}, Char = {((char)codepoint).ToString()}");
@@ -977,7 +970,7 @@ namespace FamiStudio
             ProcessPlatformEvents();
             ProcessEvents();
 
-            if (!quit && !IsOutOfProcessDialogInProgress)
+            if (!quit)
             { 
                 Tick();
                 RenderFrameAndSwapBuffer();
