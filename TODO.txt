@@ -1,5 +1,7 @@
 4.5.0
 =====
+- VRC7 0x20 Sustain issue.
+	Discussion on Discord starts here : https://discord.com/channels/747649221879922840/798008185977176074/1441315878321787011
 - Multi-expansion conflict.
 	=> No good solution, NSFPlay + MesenX both only consider E000 for S5B.
 
