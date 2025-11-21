@@ -2,6 +2,8 @@
 =====
 - VRC7 0x20 Sustain issue.
 	Discussion on Discord starts here : https://discord.com/channels/747649221879922840/798008185977176074/1441315878321787011
+- VRC7 doesnt release modulator envelopes. We probably need this fix:
+	https://github.com/digital-sound-antiques/emu2413/commit/b7174b91ec1f5b6fd6970425b0713050a85009ad
 - Multi-expansion conflict.
 	=> No good solution, NSFPlay + MesenX both only consider E000 for S5B.
 
