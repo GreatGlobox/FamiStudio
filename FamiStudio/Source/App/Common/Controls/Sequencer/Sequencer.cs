@@ -2455,6 +2455,10 @@ namespace FamiStudio
                         var dragRowIdxCurrent = GetRowIndexForCoord(y);
                         var rowIdxDelta = dragRowIdxCurrent - dragRowIdxStart;
 
+                        // No need to proceed if the patterns haven't moved.
+                        if (rowIdxDelta == 0 && patternIdxDelta == 0)
+                            return;
+
                         var copy = ModifierKeys.IsControlDown;
                         var duplicate = copy && ModifierKeys.IsShiftDown || rowIdxDelta != 0;
 
