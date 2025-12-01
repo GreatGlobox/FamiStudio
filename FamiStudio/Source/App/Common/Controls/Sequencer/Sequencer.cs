@@ -1884,8 +1884,11 @@ namespace FamiStudio
                     }
                     else
                     {
-                        if (Platform.IsDesktop)
-                            SetSelection(location, location);
+                        // NOTE: I'm not entirely sure why this was here, but it changes the selection
+                        // if right clicking an existing pattern. This causes the newly selected pattern
+                        // to duplicate / instantiate on top of itself on desktop.
+                        //if (Platform.IsDesktop)
+                            //SetSelection(location, location);
 
                         menu.Add(new ContextMenuOption("MenuProperties", PatternPropertiesLabel, () => { EditPatternProperties(new Point(x, y), pattern, location, false); }, ContextMenuSeparator.Before));
                     }
@@ -2354,7 +2357,7 @@ namespace FamiStudio
             var tmpPatterns = GetSelectedPatterns(out var customSettings);
 
             if (!copy)
-                DeleteSelection(false, customSettings != null && !copy);
+                DeleteSelection(false, customSettings != null && !copy, false);
 
             var duplicatePatternMap = new Dictionary<Pattern, Pattern>();
 
@@ -2588,7 +2591,7 @@ namespace FamiStudio
             DeleteSelection(true, IsValidTimeOnlySelection());
         }
 
-        private void DeleteSelection(bool trans = true, bool clearCustomSettings = false)
+        private void DeleteSelection(bool trans = true, bool clearCustomSettings = false, bool deleteNotesPastMax = true)
         {
             if (trans)
             {
@@ -2613,7 +2616,9 @@ namespace FamiStudio
             }
 
             Song.InvalidateCumulativePatternCache();
-            Song.DeleteNotesPastMaxInstanceLength();
+
+            if (deleteNotesPastMax)
+                Song.DeleteNotesPastMaxInstanceLength();
 
             if (trans)
             {
