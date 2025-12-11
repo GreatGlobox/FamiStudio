@@ -1884,11 +1884,11 @@ namespace FamiStudio
                     }
                     else
                     {
-                        // NOTE: I'm not entirely sure why this was here, but it changes the selection
-                        // if right clicking an existing pattern. This causes the newly selected pattern
-                        // to duplicate / instantiate on top of itself on desktop.
-                        //if (Platform.IsDesktop)
-                            //SetSelection(location, location);
+                        // Right clicking an existing pattern causes the newly selected
+                        // pattern to duplicate / instantiate on top of itself on desktop.
+                        // Workaround by only selecting if current selection is clear.
+                        if (Platform.IsDesktop && !IsSelectionValid())
+                            SetSelection(location, location);
 
                         menu.Add(new ContextMenuOption("MenuProperties", PatternPropertiesLabel, () => { EditPatternProperties(new Point(x, y), pattern, location, false); }, ContextMenuSeparator.Before));
                     }
