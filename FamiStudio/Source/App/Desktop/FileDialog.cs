@@ -420,6 +420,10 @@ namespace FamiStudio
                 }
                 else if (mode == Mode.Save)
                 {
+                    // Strip any illegal characters based on the OS.
+                    var invalid = Path.GetInvalidFileNameChars();
+                    f = new string(f.Where(c => !invalid.Contains(c)).ToArray());
+
                     // Ensure filename and path are valid (in case name contains directory separators).
                     if (!string.IsNullOrWhiteSpace(textFile.Text) && Path.Exists(Path.GetDirectoryName(f)))
                     {
