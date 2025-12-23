@@ -791,7 +791,8 @@ namespace FamiStudio
 
                 ResetCulture();
 
-                return project;
+                // Prevent a crash with broken text files.
+                return project.Songs.Count > 0 ? project : null;
             }
 #if !DEBUG
             catch (Exception e)
