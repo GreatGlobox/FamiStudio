@@ -3407,7 +3407,7 @@ namespace FamiStudio
 
             if (!outline)
             {
-                if (isFirstPart && attackState != NoteAttackState.NoAttack && sx > noteAttackSizeX + attackIconPosX * 2 + 2)
+                if (activeChannel && isFirstPart && attackState != NoteAttackState.NoAttack && sx > noteAttackSizeX + attackIconPosX * 2 + 2)
                 {
                     if (attackState == NoteAttackState.NoAttackError)
                     {

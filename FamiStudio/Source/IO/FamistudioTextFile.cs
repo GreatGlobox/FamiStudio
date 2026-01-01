@@ -779,10 +779,6 @@ namespace FamiStudio
                     }
                 }
 
-                // Prevent a crash with broken text files (all projects must have at least one song).
-                if (project.Songs.Count == 0)
-                    project.CreateSong();
-
                 // Post-load
                 foreach (var inst in project.Instruments)
                 {
@@ -795,7 +791,8 @@ namespace FamiStudio
 
                 ResetCulture();
 
-                return project;
+                // Prevent a crash with broken text files (all projects must have at least one song).
+                return project.Songs.Count > 0 ? project : null;
             }
 #if !DEBUG
             catch (Exception e)
