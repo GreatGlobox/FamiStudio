@@ -787,7 +787,10 @@ namespace FamiStudio
                     {
                         var env = inst.Envelopes[i];
                         if (env != null && !env.ValuesInValidRange(inst, i))
+                        {
+                            Log.LogMessage(LogSeverity.Warning, $"Envelope '{EnvelopeType.LocalizedNames[i]}' of instrument '{inst.Name}' has values outside of the supported range, clamping.");
                             env.ClampToValidRange(inst, i);
+                        }
                     }
 
                     inst.PerformPostLoadActions();
