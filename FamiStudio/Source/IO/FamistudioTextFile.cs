@@ -782,6 +782,14 @@ namespace FamiStudio
                 // Post-load
                 foreach (var inst in project.Instruments)
                 {
+                    // Ensure all envelopes are within valid range (in the event of a garbage text file).
+                    for (int i = 0; i < EnvelopeType.Count; i++)
+                    {
+                        var env = inst.Envelopes[i];
+                        if (env != null && !env.ValuesInValidRange(inst, i))
+                            env.ClampToValidRange(inst, i);
+                    }
+
                     inst.PerformPostLoadActions();
                 }
 
