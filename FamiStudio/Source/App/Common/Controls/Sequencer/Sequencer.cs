@@ -1495,7 +1495,7 @@ namespace FamiStudio
                     {
                         if (pattern != null)
                         {
-                            if (ModifierKeys.IsShiftDown)
+                            if (ModifierKeys.IsShiftDown && !ModifierKeys.IsControlDown)
                             {
                                 DeletePattern(location);
                                 return true;
