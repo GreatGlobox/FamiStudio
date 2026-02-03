@@ -305,7 +305,13 @@ namespace FamiStudio
                     envelopeValues[EnvelopeType.Arpeggio] = 0;
                 }
 
-                if (noteHasAttack)
+                // DPCM should always retrigger. Attack only affects initial DMC value.
+                if (channelType == ChannelType.Dpcm)
+                {
+                    noteTriggered = true;
+                    resetInstrumentOnNextAttack = false;
+                }
+                else if (noteHasAttack)
                 {
                     instrumentChanged |= resetInstrumentOnNextAttack;
 

@@ -6653,6 +6653,7 @@ famistudio_sfx_sample_play:
 
 sample_play:
 
+    @update_flags = famistudio_r1
     @tmp = famistudio_r3
     @sample_index = famistudio_r3
     @sample_data_ptr = famistudio_ptr1
@@ -6714,6 +6715,8 @@ sample_play:
 @read_dmc_initial_value:
 .endif    
 
+    bit @update_flags
+    bmi @start_dmc
     lda (@sample_data_ptr),y ; Initial DMC counter
     sta FAMISTUDIO_APU_DMC_RAW
 

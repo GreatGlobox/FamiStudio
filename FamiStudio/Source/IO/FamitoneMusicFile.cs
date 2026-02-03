@@ -1426,7 +1426,7 @@ namespace FamiStudio
                         if (note.IsValid)
                         {
                             // Instrument change.
-                            if (note.IsMusical && note.Instrument != null && !channel.IsDpcmChannel)
+                            if (note.IsMusical && note.Instrument != null)
                             {
                                 var attack = note.HasAttack || !Channel.CanDisableAttack(channel.Type, instrument, note.Instrument);
 
@@ -1435,7 +1435,7 @@ namespace FamiStudio
                                     // TODO: Remove note entirely after a slide that matches the next note with no attack.
                                     channelData.Add($"{hexp}{OpcodeDisableAttack:x2}+");
                                 }
-                                else
+                                else if (!channel.IsDpcmChannel)
                                 {
                                     // If there FDS speed/depth was previously overridden (but is not this frame) and we have an attack,
                                     // we need to rebind the instrument to set the correct speed/depth again. This is pretty wasteful since
@@ -1467,7 +1467,7 @@ namespace FamiStudio
                                     }
                                 }
 
-                                if (note.Instrument != instrument)
+                                if (note.Instrument != instrument && !channel.IsDpcmChannel)
                                 {
                                     // Change saw volume if needed.
                                     if (channel.Type == ChannelType.Vrc6Saw && sawVolume != note.Instrument.Vrc6SawMasterVolume)
