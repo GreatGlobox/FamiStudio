@@ -26,7 +26,7 @@ namespace FamiStudio
                     if (mapping != null)
                     {
                         var sample = mapping.Sample;
-                        if (sample != null)
+                        if (sample != null && sample.ProcessedData.Length > 0)
                         {
                             var dmcInitialValue = 0;
 

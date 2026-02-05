@@ -170,7 +170,7 @@ namespace FamiStudio
                         {
                             var instrument = it.Note.Instrument;
                             var mapping = instrument.GetDPCMMapping(it.Note.Value);
-                            if (mapping != null && !sampleMappingIndices.ContainsKey(mapping))
+                            if (mapping != null && mapping.Sample.ProcessedData.Length > 0 && !sampleMappingIndices.ContainsKey(mapping))
                             {
                                 sampleMappingIndices.Add(mapping, 0);
 
