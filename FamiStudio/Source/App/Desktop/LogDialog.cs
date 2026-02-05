@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 
 namespace FamiStudio
 {
@@ -75,7 +76,10 @@ namespace FamiStudio
         public void StayModalUntilClosed()
         {
             while (dialog.Visible)
+            {
                 ConditionalRunEventLoop();
+                Thread.Sleep(10);
+            }
         }
 
         public void Close()
