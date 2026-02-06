@@ -78,7 +78,7 @@ namespace FamiStudio
             while (dialog.Visible)
             {
                 ConditionalRunEventLoop();
-                Thread.Sleep(10);
+                Thread.Sleep(4);
             }
         }
 
