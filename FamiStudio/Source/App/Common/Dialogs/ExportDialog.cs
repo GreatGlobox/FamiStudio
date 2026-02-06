@@ -912,9 +912,7 @@ namespace FamiStudio
             {
                 var filename = lastExportFilename != null ? lastExportFilename : Platform.ShowSaveFileDialog("Export Video File", "MP4 Video File (*.mp4)|*.mp4", ref Settings.LastExportFolder);
                 ExportVideoAction(filename);
-
-                if (!Log.ShouldAbortOperation)
-                    ShowExportResultToast(FormatVideoMessage);
+                ShowExportResultToast(FormatVideoMessage);
             }
         }
 
