@@ -55,6 +55,7 @@ namespace FamiStudio
         // VRC7
         private byte   vrc7Patch = Vrc7InstrumentPatch.Bell;
         private byte[] vrc7PatchRegs = new byte[8];
+        private bool   vrc7SustainBitSet;
 
         // EPSM
         private byte   epsmPatch = EpsmInstrumentPatch.Default;
@@ -75,6 +76,7 @@ namespace FamiStudio
         public Envelope[] Envelopes => envelopes;
         public Dictionary<int, DPCMSampleMapping> SamplesMapping => samplesMapping;
         public byte[] Vrc7PatchRegs => vrc7PatchRegs;
+        public bool   Vrc7SustainBitSet { get => vrc7SustainBitSet; set => vrc7SustainBitSet = value; }
         public byte[] EpsmPatchRegs => epsmPatchRegs;
         public string FolderName { get => folderName; set => folderName = value; }
         public Folder Folder => string.IsNullOrEmpty(folderName) ? null : project.GetFolder(FolderType.Instrument, folderName);
@@ -997,6 +999,12 @@ namespace FamiStudio
                             buffer.Serialize(ref vrc7Patch);
                             for (int i = 0; i < vrc7PatchRegs.Length; i++)
                                 buffer.Serialize(ref vrc7PatchRegs[i]);
+
+                            // At version 19 (FamiStudio 4.5.0), we added the sustain bit setting for VRC7.
+                            if (buffer.Version >= 19)
+                                buffer.Serialize(ref vrc7SustainBitSet);
+                            else
+                                vrc7SustainBitSet = true; // Set to true for older songs to avoid breaking them.
                             break;
 
                         case ExpansionType.EPSM:

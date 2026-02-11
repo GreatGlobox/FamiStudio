@@ -392,6 +392,21 @@ namespace FamiStudio
         int hoverEffectIndex = -1;
         int hoverTopLeftButton = -1;
 
+        // Scale
+        int scaleType = (int)ScaleType.Major;
+        int rootNoteIdx = 0;
+
+        enum ScaleType
+        {
+            Major,
+            Minor,
+            Dorian,
+            Phrygian,
+            Lydian,
+            Mixolydian,
+            Locrian
+        };
+
         enum GizmoAction
         {
             ResizeNote,
@@ -566,6 +581,13 @@ namespace FamiStudio
         LocalizedString SnapToBeatsContext;
         LocalizedString SnapToBeatContextTooltip;
         LocalizedString SnapToBeatsContextTooltip;
+        LocalizedString ScaleMajor;
+        LocalizedString ScaleMinor;
+        LocalizedString ScaleDorian;
+        LocalizedString ScalePhrygian;
+        LocalizedString ScaleLydian;
+        LocalizedString ScaleMixolydian;
+        LocalizedString ScaleLocrian;
 
         // tooltips
         LocalizedString SeekTooltip;
@@ -1209,6 +1231,30 @@ namespace FamiStudio
                     mobileEraseGeometry[i * 2 + 1] = MathF.Sin(angle) * noteSizeY * 1.5f;
                 }
             }
+        }
+
+        private bool IsNoteOnScale(int value)
+        {
+            var offset = value - rootNoteIdx;
+
+            switch ((ScaleType)scaleType)
+            {
+                case ScaleType.Major:                    break;
+                case ScaleType.Minor:      offset += 9;  break;
+                case ScaleType.Dorian:     offset += 2;  break;
+                case ScaleType.Phrygian:   offset += 4;  break;
+                case ScaleType.Lydian:     offset += 5;  break;
+                case ScaleType.Mixolydian: offset += 7;  break;
+                case ScaleType.Locrian:    offset += 11; break;
+            }
+
+            // Wrap octave. Cheaper than modulo I guess (this is called frequently).
+            if (offset >= 12)
+                offset -= 12;
+            else if (offset < 0)
+                offset += 12;
+
+            return IsBlackKey(offset);
         }
 
         private bool IsBlackKey(int key)
@@ -2675,8 +2721,18 @@ namespace FamiStudio
                 for (int j = 0; j < 12; j++)
                 {
                     int y = octaveBaseY - j * noteSizeY;
-                    if (!IsBlackKey(j))
-                        r.b.FillRectangle(0, y - noteSizeY, maxX, y, Theme.DarkGreyColor4);
+
+                    // Scales (default C Major for all but channel).
+                    if (editMode == EditionMode.Channel)
+                    {
+                        if (!IsNoteOnScale(j))
+                            r.b.FillRectangle(0, y - noteSizeY, maxX, y, Theme.DarkGreyColor4);
+                    }
+                    else
+                    {
+                        if (!IsBlackKey(j))
+                            r.b.FillRectangle(0, y - noteSizeY, maxX, y, Theme.DarkGreyColor4);
+                    }
                 }
             }
 
@@ -9542,6 +9598,40 @@ namespace FamiStudio
             return false;
         }
 
+        private bool HandleMouseUpScalesMaximize(PointerEventArgs e)
+        {
+            if (e.Right && IsPointOnMaximizeButton(e.X, e.Y))
+            { 
+                var scales = new[] { ScaleMajor, ScaleMinor, ScaleDorian, ScalePhrygian, ScaleLydian, ScaleMixolydian, ScaleLocrian };
+                var roots  = new[] { "C", "C# / Db", "D", "D# / Eb", "E", "F", "F# / Gb", "G", "G# / Ab", "A", "A# / Bb", "B" };
+
+                var options = new ContextMenuOption[scales.Length + roots.Length + 1];
+
+                options[0] = new ContextMenuOption(MaximizePianoRollTooltip, null, () => { ToggleMaximize(); }, () => maximized ? ContextMenuCheckState.Checked : ContextMenuCheckState.Unchecked);
+
+                for (var i = 0; i < scales.Length; i++)
+                {
+                    var j = i; // Important, copy for lamdba.
+                    var name = scales[i];
+
+                    options[i + 1] = new ContextMenuOption(name, tooltip, () => { scaleType = j; }, () => scaleType == j ? ContextMenuCheckState.Radio : ContextMenuCheckState.None, i == 0 ? ContextMenuSeparator.Before : ContextMenuSeparator.None);
+                }
+
+                for (var i = 0; i < roots.Length; i++)
+                {
+                    var j = i; // Important, copy for lamdba.
+                    var name = roots[i];
+
+                    options[i + 1 + scales.Length] = new ContextMenuOption(name, tooltip, () => { rootNoteIdx = j; }, () => rootNoteIdx == j ? ContextMenuCheckState.Radio : ContextMenuCheckState.None, i == 0 ? ContextMenuSeparator.Before : ContextMenuSeparator.None);
+                }
+
+                App.ShowContextMenuAsync(options);
+                return true;
+            }
+
+            return false;
+        }
+
         private bool HandleMouseUpChannelNote(PointerEventArgs e)
         {
             return e.Right && HandleContextMenuChannelNote(e.X, e.Y);
@@ -9603,6 +9693,7 @@ namespace FamiStudio
                     if (HandleMouseUpChannelNote(e)) goto Handled;
                     if (HandleMouseUpEffectPanel(e)) goto Handled;
                     if (HandleMouseUpChannelHeader(e)) goto Handled;
+                    if (HandleMouseUpScalesMaximize(e)) goto Handled;
                 }
 
                 if (editMode == EditionMode.Envelope ||

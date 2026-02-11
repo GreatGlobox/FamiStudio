@@ -871,6 +871,7 @@ namespace FamiStudio
                 var dmc = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMCOUNTER, 0);
                 var len = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMSAMPLELENGTH, 0);
                 var dmcActive = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMACTIVE, 0);
+                var newDelta = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMDELTAWRITE, 0);
                 var minSampleLen = preserveDpcmPadding ? 1 : 2;
                 var noteTriggeredThisFrame = false;
 
@@ -892,7 +893,10 @@ namespace FamiStudio
 
                     var sample = project.FindMatchingSample(sampleData);
                     if (sample == null)
+                    {
                         sample = project.CreateDPCMSampleFromDmcData($"Sample {project.Samples.Count + 1}", sampleData);
+                        sample.DmcInitialValueDiv2 = dmc / 2;
+                    }
 
                     var loop  = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMLOOP, 0) != 0;
                     var pitch = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMPITCH, 0);
@@ -942,11 +946,14 @@ namespace FamiStudio
                         var note = channel.GetOrCreatePattern(p).GetOrCreateNoteAt(n);
                         note.Value = (byte)noteValue;
                         note.Instrument = dpcmInst;
+                        note.HasAttack = newDelta != 0;
+
                         if (state.dmc != dmc)
                         {
                             note.DeltaCounter = (byte)dmc;
                             state.dmc = dmc;
                         }
+                            
                         hasNote = true;
                         state.state = ChannelState.Triggered;
                         noteTriggeredThisFrame = true;

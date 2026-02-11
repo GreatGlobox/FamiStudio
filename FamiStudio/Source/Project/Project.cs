@@ -29,7 +29,7 @@ namespace FamiStudio
         // Version 16 = FamiStudio 4.2.0 (Folders, sound engine options, project mixer settings)
         // Version 17 = FamiStudio 4.3.0 (Tuning)
         // Version 18 = FamiStudio 4.4.0 (FDS multi-wave)
-        public const int Version = 18;
+        public const int Version = 19;
         public const int MaxMappedSampleSize = 0x40000;
         public const int MaxDPCMBanks = 64; 
         public const int MaxSampleAddress = 255 * 64;

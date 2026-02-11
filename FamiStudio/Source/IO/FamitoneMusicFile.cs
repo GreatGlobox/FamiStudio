@@ -748,7 +748,8 @@ namespace FamiStudio
                         }
                         else if (instrument.IsVrc7)
                         {
-                            lines.Add($"\t{db} {hexp}{(instrument.Vrc7Patch << 4):x2}, {hexp}00");
+                            var sustainBitSet = instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
+                            lines.Add($"\t{db} {hexp}{(instrument.Vrc7Patch << 4):x2}, {hexp}{sustainBitSet:x2}");
                             lines.Add($"\t{db} {String.Join(",", instrument.Vrc7PatchRegs.Select(r => $"{hexp}{r:x2}"))}");
                         }
                         else if (instrument.IsEpsm)

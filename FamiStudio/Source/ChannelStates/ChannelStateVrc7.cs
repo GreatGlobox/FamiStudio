@@ -107,7 +107,7 @@ namespace FamiStudio
 
                 // Period hi bit at 0x10 : goes from 0->1 = attack, goes from 1->0 release
                 var periodLo = (byte)(period & 0xff);
-                var periodHi = (byte)(0x20 | (prevPeriodHi & 0x10) | ((octave & 0x7) << 1) | ((period >> 8) & 1));
+                var periodHi = (byte)((note.Instrument.Vrc7SustainBitSet ? 0x20 : 0x00) | (prevPeriodHi & 0x10) | ((octave & 0x7) << 1) | ((period >> 8) & 1));
 
                 WriteVrc7Register(NesApu.VRC7_REG_VOL_1 + channelIdx, vrc7Instrument | volume);
                 WriteVrc7Register(NesApu.VRC7_REG_LO_1  + channelIdx, periodLo);

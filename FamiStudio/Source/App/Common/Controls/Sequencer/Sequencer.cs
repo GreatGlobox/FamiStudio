@@ -655,11 +655,15 @@ namespace FamiStudio
             var showExpIcons = showExpansionIcons && Song.Project.UsesAnyExpansionAudio;
             var atlas = showExpIcons ? bmpExpansions : bmpChannels;
             var selectedChannelIndex = App.SelectedChannelIndex;
+            var selectedInstrument   = App.SelectedInstrument;
 
             for (int i = 0, y = 0; i < Song.Channels.Length; i++)
             {
                 if (channelVisible[i])
                 {
+                    // For higlighting supported instrments
+                    var isInstSupported = Song.Channels[i].SupportsInstrument(selectedInstrument);
+
                     // Icon
                     var isHoverRow = hoverRow == channelToRow[i];
                     var channel = Song.Channels[i];
@@ -671,7 +675,7 @@ namespace FamiStudio
                     // Name
                     var font = i == selectedChannelIndex ? Fonts.FontMediumBold : Fonts.FontMedium;
                     var iconHeight = bmpChannels[0].ElementSize.Height * channelBitmapScale;
-                    c.DrawText(Song.Channels[i].LocalizedName, font, channelNamePosX, y + channelIconPosY, Theme.LightGreyColor2, TextFlags.MiddleLeft, 0, iconHeight);
+                    c.DrawText(Song.Channels[i].LocalizedName, font, channelNamePosX, y + channelIconPosY, Theme.LightGreyColor2.Transparent(isInstSupported ? 255 : 80), TextFlags.MiddleLeft, 0, iconHeight);
 
                     // Force display icon.
                     var ghostHoverOpacity = isHoverRow && (hoverIconMask & 2) != 0 ? 192 : 255;
@@ -680,7 +684,11 @@ namespace FamiStudio
 
                     // Hover
                     if (isHoverRow)
-                        c.FillRectangle(0, y, channelNameSizeX, y + channelSizeY, Theme.MediumGreyColor1);
+                        c.FillRectangle(0, y, channelNameSizeX, y + channelSizeY, Theme.MediumGreyColor1.Transparent(isInstSupported ? 255 : 192));
+
+                    // Darken unsupported channel backgrounds
+                    if (!isInstSupported)
+                        c.FillRectangle(0, y, channelNameSizeX, y + channelSizeY, Theme.BlackColor.Transparent(80));
 
                     y += channelSizeY;
                 }
