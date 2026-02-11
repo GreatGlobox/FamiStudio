@@ -404,7 +404,10 @@ namespace FamiStudio
             Phrygian,
             Lydian,
             Mixolydian,
-            Locrian
+            Locrian,
+            MelodicMinor,
+            HarmonicMinor,
+            DoubleHarmonic
         };
 
         enum GizmoAction
@@ -588,6 +591,9 @@ namespace FamiStudio
         LocalizedString ScaleLydian;
         LocalizedString ScaleMixolydian;
         LocalizedString ScaleLocrian;
+        LocalizedString ScaleMelodicMinor;
+        LocalizedString ScaleHarmonicMinor;
+        LocalizedString ScaleDoubleHarmonic;
 
         // tooltips
         LocalizedString SeekTooltip;
@@ -1233,28 +1239,26 @@ namespace FamiStudio
             }
         }
 
-        private bool IsNoteOnScale(int value)
+        private bool IsNoteOffScale(int key)
         {
-            var offset = value - rootNoteIdx;
+            // Apply offset.
+            key = key >= rootNoteIdx ? key - rootNoteIdx : key + 12 - rootNoteIdx;
 
-            switch ((ScaleType)scaleType)
+            return (ScaleType)scaleType switch
             {
-                case ScaleType.Major:                    break;
-                case ScaleType.Minor:      offset += 9;  break;
-                case ScaleType.Dorian:     offset += 2;  break;
-                case ScaleType.Phrygian:   offset += 4;  break;
-                case ScaleType.Lydian:     offset += 5;  break;
-                case ScaleType.Mixolydian: offset += 7;  break;
-                case ScaleType.Locrian:    offset += 11; break;
-            }
+                ScaleType.Minor          => key == 1 || key == 4 || key == 6 || key == 9 || key == 11,
+                ScaleType.Dorian         => key == 1 || key == 4 || key == 6 || key == 8 || key == 11,
+                ScaleType.Phrygian       => key == 2 || key == 4 || key == 6 || key == 9 || key == 11,
+                ScaleType.Lydian         => key == 1 || key == 3 || key == 5 || key == 8 || key == 10,
+                ScaleType.Mixolydian     => key == 1 || key == 3 || key == 6 || key == 8 || key == 11,
+                ScaleType.Locrian        => key == 2 || key == 4 || key == 7 || key == 9 || key == 11,
+                ScaleType.MelodicMinor   => key == 1 || key == 4 || key == 6 || key == 8 || key == 10,
+                ScaleType.HarmonicMinor  => key == 1 || key == 4 || key == 6 || key == 9 || key == 10,
+                ScaleType.DoubleHarmonic => key == 2 || key == 3 || key == 6 || key == 9 || key == 10,
 
-            // Wrap octave. Cheaper than modulo I guess (this is called frequently).
-            if (offset >= 12)
-                offset -= 12;
-            else if (offset < 0)
-                offset += 12;
-
-            return IsBlackKey(offset);
+                // Major scale is default.
+                _ => IsBlackKey(key),
+            };
         }
 
         private bool IsBlackKey(int key)
@@ -2725,7 +2729,7 @@ namespace FamiStudio
                     // Scales (default C Major for all but channel).
                     if (editMode == EditionMode.Channel)
                     {
-                        if (!IsNoteOnScale(j))
+                        if (!IsNoteOffScale(j))
                             r.b.FillRectangle(0, y - noteSizeY, maxX, y, Theme.DarkGreyColor4);
                     }
                     else
@@ -9602,7 +9606,7 @@ namespace FamiStudio
         {
             if (e.Right && IsPointOnMaximizeButton(e.X, e.Y))
             { 
-                var scales = new[] { ScaleMajor, ScaleMinor, ScaleDorian, ScalePhrygian, ScaleLydian, ScaleMixolydian, ScaleLocrian };
+                var scales = new[] { ScaleMajor, ScaleMinor, ScaleDorian, ScalePhrygian, ScaleLydian, ScaleMixolydian, ScaleLocrian, ScaleMelodicMinor, ScaleHarmonicMinor, ScaleDoubleHarmonic };
                 var roots  = new[] { "C", "C# / Db", "D", "D# / Eb", "E", "F", "F# / Gb", "G", "G# / Ab", "A", "A# / Bb", "B" };
 
                 var options = new ContextMenuOption[scales.Length + roots.Length + 1];
