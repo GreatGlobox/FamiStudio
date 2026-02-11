@@ -105,9 +105,12 @@ namespace FamiStudio
                 var octave  = GetOctave(ref period);
                 var volume  = 15 - GetVolume();
 
+                // Note can end up null if playing notes and switching between channels quickly.
+                var sustain = note.Instrument != null && note.Instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
+
                 // Period hi bit at 0x10 : goes from 0->1 = attack, goes from 1->0 release
                 var periodLo = (byte)(period & 0xff);
-                var periodHi = (byte)((note.Instrument.Vrc7SustainBitSet ? 0x20 : 0x00) | (prevPeriodHi & 0x10) | ((octave & 0x7) << 1) | ((period >> 8) & 1));
+                var periodHi = (byte)(sustain | (prevPeriodHi & 0x10) | ((octave & 0x7) << 1) | ((period >> 8) & 1));
 
                 WriteVrc7Register(NesApu.VRC7_REG_VOL_1 + channelIdx, vrc7Instrument | volume);
                 WriteVrc7Register(NesApu.VRC7_REG_LO_1  + channelIdx, periodLo);
