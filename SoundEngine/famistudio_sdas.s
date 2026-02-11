@@ -893,6 +893,7 @@ famistudio_vrc6_saw_prev_hi    = famistudio_vrc6_saw_volume
 famistudio_chn_vrc7_prev_hi:      .ds 6
 famistudio_chn_vrc7_patch:        .ds 6
 famistudio_chn_vrc7_trigger:      .ds 6 ; bit 0 = new note triggered, bit 7 = note released.
+famistudio_chn_vrc7_sustain:      .ds 1 ; sustain bit overrides release.
 .endif
 .if FAMISTUDIO_EXP_EPSM
 .ifgt FAMISTUDIO_EXP_EPSM_RHYTHM_CNT
@@ -2651,7 +2652,7 @@ famistudio_update_vrc7_channel_sound:
 
     txa
     asl
-    ora #0x20
+    ora famistudio_chn_vrc7_sustain
     ora *.pitch+1
     ora *.tmp
     sta famistudio_chn_vrc7_prev_hi, y
@@ -5121,6 +5122,8 @@ famistudio_set_vrc7_instrument:
     .famistudio_set_vrc7_instrument_read_custom_patch:
     ldx #0
     iny
+    lda [*.ptr],y
+    sta famistudio_chn_vrc7_sustain
     iny
     .famistudio_set_vrc7_instrument_read_patch_loop:
         stx FAMISTUDIO_VRC7_REG_SEL
