@@ -544,6 +544,7 @@ namespace FamiStudio
         private Project project;
         private ChannelState[] channelStates;
         private bool preserveDpcmPadding;
+        private bool importDmcValues;
         private readonly int[] DPCMOctaveOrder = new [] { 4, 5, 3, 6, 2, 7, 1, 0 };
 
         public int GetBestMatchingNote(int period, ushort[] noteTable, out int finePitch)
@@ -895,7 +896,9 @@ namespace FamiStudio
                     if (sample == null)
                     {
                         sample = project.CreateDPCMSampleFromDmcData($"Sample {project.Samples.Count + 1}", sampleData);
-                        sample.DmcInitialValueDiv2 = dmc / 2;
+
+                        if (importDmcValues && newDelta != 0)
+                            sample.DmcInitialValueDiv2 = dmc / 2;
                     }
 
                     var loop  = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMLOOP, 0) != 0;
@@ -950,7 +953,9 @@ namespace FamiStudio
 
                         if (state.dmc != dmc)
                         {
-                            note.DeltaCounter = (byte)dmc;
+                            // Only set the delta counter if it doesn't already match the initial value, or if there is no attack.
+                            if (!note.HasAttack || !importDmcValues || (note.HasAttack && dmc / 2 != sample.DmcInitialValueDiv2))
+                                note.DeltaCounter = (byte)dmc;
                             state.dmc = dmc;
                         }
                             
@@ -1404,7 +1409,7 @@ namespace FamiStudio
             return mask;
         }
 
-        public Project Load(string filename, int songIndex, int duration, int patternLength, int startFrame, bool removeIntroSilence, bool reverseDpcm, bool preserveDpcmPad, int tuning = 440)
+        public Project Load(string filename, int songIndex, int duration, int patternLength, int startFrame, bool removeIntroSilence, bool reverseDpcm, bool preserveDpcmPad, bool importDmcVal, int tuning = 440)
         {
             nsf = NotSoFatso.NsfOpen(filename);
 
@@ -1420,6 +1425,7 @@ namespace FamiStudio
                 return null;
 
             preserveDpcmPadding = preserveDpcmPad;
+            importDmcValues = importDmcVal;
 
             var palSource = (NotSoFatso.NsfIsPal(nsf) & 1) == 1;
             var numFrames = (int)MathF.Round(duration * (palSource ? 50.006982f : 60.098814f));
