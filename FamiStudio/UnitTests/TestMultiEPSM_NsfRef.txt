@@ -3104,7 +3104,7 @@ Project TempoMode="FamiStudio" Name="Untitled" Author="Unknown" Expansions="VRC6
 				Note Time="66" FinePitch="-4"
 				Note Time="67" FinePitch="-2"
 				Note Time="68" FinePitch="0"
-				Note Time="80" Value="F3" Duration="39" Release="20" Instrument="VRC7 Brass" Attack="False"
+				Note Time="80" Value="F3" Duration="20" Instrument="VRC7 Brass" Attack="False"
 				Note Time="100" Volume="13"
 				Note Time="101" Volume="11"
 				Note Time="102" Volume="9"

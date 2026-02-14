@@ -5870,7 +5870,6 @@ famistudio_advance_channel:
                 lda #9
                 sta famistudio_chn_note_counter,x
             .endif
-            bne .famistudio_update_channel_done
 .endif
 
 .famistudio_update_channel_check_attack:
@@ -5878,6 +5877,8 @@ famistudio_advance_channel:
     beq .famistudio_update_channel_done
     bit *.update_flags
     bmi .famistudio_update_channel_done
+    cpx #4 ; DPCM doesn't need to run do_note_attack, it's only used for writing to $4011
+    beq .famistudio_update_channel_done
 
     ; Note attack. `famistudio_do_note_attack` (or any proc it calls) are not
     ; allowed to clobber r0 or ptr0. They can clobber r1 if they are done using it.
