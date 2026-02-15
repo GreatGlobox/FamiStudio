@@ -897,10 +897,10 @@ namespace FamiStudio
                     if (sample == null)
                         sample = project.CreateDPCMSampleFromDmcData($"Sample {project.Samples.Count + 1}", sampleData);
 
-                    // If the current sample never had an initial value set and a new delta occured on this frame,
-                    // use the current DMC value as the sample's initial value. Notes with no attack could lead to 
-                    // missing the initial DMC value otherwise.
-                    if (importDmcValues && newDelta != 0 && !sampleIdsInitialSet.Contains(sample.Id) )
+                    // If the current sample never had an initial value set and the delta value changed on this
+                    // frame, use the current DMC value as the sample's DMC initial value. Notes with no attack
+                    // could potentially lead to missing the DMC initial value otherwise.
+                    if (importDmcValues && newDelta != 0 && !sampleIdsInitialSet.Contains(sample.Id))
                     {
                         sample.DmcInitialValueDiv2 = dmc / 2;
                         sampleIdsInitialSet.Add(sample.Id);
