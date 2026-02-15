@@ -545,6 +545,7 @@ namespace FamiStudio
         private ChannelState[] channelStates;
         private bool preserveDpcmPadding;
         private bool importDmcValues;
+        private readonly List<int> sampleIdsInitialSet = [];
         private readonly int[] DPCMOctaveOrder = new [] { 4, 5, 3, 6, 2, 7, 1, 0 };
 
         public int GetBestMatchingNote(int period, ushort[] noteTable, out int finePitch)
@@ -896,9 +897,13 @@ namespace FamiStudio
                     if (sample == null)
                     {
                         sample = project.CreateDPCMSampleFromDmcData($"Sample {project.Samples.Count + 1}", sampleData);
+                    }
 
-                        if (importDmcValues && newDelta != 0)
-                            sample.DmcInitialValueDiv2 = dmc / 2;
+                    // Assume we want the new initial value if a new delta is written and the sample never had one set.
+                    if (importDmcValues && !sampleIdsInitialSet.Contains(sample.Id) && newDelta != 0)
+                    {
+                        sample.DmcInitialValueDiv2 = dmc / 2;
+                        sampleIdsInitialSet.Add(sample.Id);
                     }
 
                     var loop  = NotSoFatso.NsfGetState(nsf, channel.Type, NotSoFatso.STATE_DPCMLOOP, 0) != 0;
