@@ -486,6 +486,7 @@ namespace FamiStudio
 
             var label = CreateLabel(panel, folder.Name, false, icon.Right + marginX, 0, propsButton.Left - icon.Right - marginX * 2, true);
             label.MouseDoubleClick += (s, e) => EditFolderProperties(folder);
+            label.TouchDoubleClick += (s, e) => EditFolderProperties(folder);
             label.SupportsDoubleClick = true;
         }
 
@@ -655,6 +656,7 @@ namespace FamiStudio
 
             var label = CreateCenteredLabel(panel, projectText, 2 * mixerButton.Left - panel.Width, true);
             label.MouseDoubleClick += (s, e) => EditProjectProperties();
+            label.TouchDoubleClick += (s, e) => EditProjectProperties();
             label.SupportsDoubleClick = true;
         }
 
@@ -735,6 +737,7 @@ namespace FamiStudio
             var label = CreateLabel(panel, song.Name, true, icon.Right + marginX, 0, props.Left - icon.Right - marginX * 2, true);
             label.Font = song == App.SelectedSong ? fonts.FontMediumBold : fonts.FontMedium;
             label.MouseDoubleClick += (s, e) => EditSongProperties(song);
+            label.TouchDoubleClick += (s, e) => EditSongProperties(song);
             label.SupportsDoubleClick = true;
         }
 
@@ -835,6 +838,7 @@ namespace FamiStudio
             var label = CreateLabel(panel, instrument.Name, true, icon.Right + marginX, 0, lastEnv.Left - icon.Right - marginX * 2, true);
             label.Font = App.SelectedInstrument == instrument ? fonts.FontMediumBold : fonts.FontMedium;
             label.MouseDoubleClick += (s, e) => EditInstrumentProperties(instrument);
+            label.TouchDoubleClick += (s, e) => EditInstrumentProperties(instrument);
             label.SupportsDoubleClick = true;
         }
 
@@ -987,6 +991,7 @@ namespace FamiStudio
 
             var label = CreateLabel(panel, sample.Name, true, icon.Right + marginX, 0, play.Left - icon.Right - marginX * 2, true);
             label.MouseDoubleClick += (s, e) => EditDPCMSampleProperties(sample);
+            label.TouchDoubleClick += (s, e) => EditDPCMSampleProperties(sample);
             label.SupportsDoubleClick = true;
         }
 
@@ -1087,6 +1092,7 @@ namespace FamiStudio
             var label = CreateLabel(panel, arp.Name, true, icon.Right + marginX, 0, edit.Left - icon.Right - marginX * 2);
             label.Font = App.SelectedArpeggio == arp ? fonts.FontMediumBold : fonts.FontMedium;
             label.MouseDoubleClick += (s, e) => EditArpeggioProperties(arp);
+            label.TouchDoubleClick += (s, e) => EditArpeggioProperties(arp);
             label.SupportsDoubleClick = true;
         }
         
