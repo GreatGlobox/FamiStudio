@@ -465,7 +465,7 @@ namespace FamiStudio
         private void CreateFolderControls(Folder folder)
         {
             var panel = CreateGradientPanel(Theme.DarkGreyColor5, folder);
-            panel.ToolTip = $"<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft><MouseLeft> {PropertiesFolderTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerDown += (s, e) => Folder_PointerDown(s, e, folder);
             panel.PointerUp += (s, e) => Folder_PointerUp(e, folder);
             panel.ContainerPointerDownNotify += (s, e) => Folder_PointerDown(s, e, folder);
@@ -484,7 +484,9 @@ namespace FamiStudio
             propsButton.ToolTip = $"<MouseLeft> {PropertiesFolderTooltip}";
             propsButton.Click += (s) => EditFolderProperties(folder);
 
-            CreateLabel(panel, folder.Name, false, icon.Right + marginX, 0, propsButton.Left - icon.Right - marginX * 2, true);
+            var label = CreateLabel(panel, folder.Name, false, icon.Right + marginX, 0, propsButton.Left - icon.Right - marginX * 2, true);
+            label.MouseDoubleClick += (s, e) => EditFolderProperties(folder);
+            label.SupportsDoubleClick = true;
         }
 
         private void Folder_PointerDown(Control sender, PointerEventArgs e, Folder folder)
@@ -638,7 +640,7 @@ namespace FamiStudio
             var project = App.Project;
             var projectText = string.IsNullOrEmpty(project.Author) ? $"{project.Name}" : $"{project.Name} ({project.Author})";
             var panel = CreateGradientPanel(Theme.DarkGreyColor4, project);
-            panel.ToolTip = $"<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft><MouseLeft> {PropertiesProjectTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerUp += (s, e) => ProjectHeader_PointerUp(e);
             panel.ContainerPointerUpNotify += (s, e) => ProjectHeader_PointerUp(e);
 
@@ -651,7 +653,9 @@ namespace FamiStudio
             mixerButton.Dimmed = !project.AllowMixerOverride;
             mixerButton.Click += (s) => mixerButton.Dimmed = !ToggleAllowProjectMixer();
 
-            CreateCenteredLabel(panel, projectText, 2 * mixerButton.Left - panel.Width, true);
+            var label = CreateCenteredLabel(panel, projectText, 2 * mixerButton.Left - panel.Width, true);
+            label.MouseDoubleClick += (s, e) => EditProjectProperties();
+            label.SupportsDoubleClick = true;
         }
 
         private void ProjectHeader_PointerUp(PointerEventArgs e)
@@ -713,7 +717,7 @@ namespace FamiStudio
         private void CreateSongControls(Song song)
         {
             var panel = CreateGradientPanel(song.Color, song);
-            panel.ToolTip = $"<MouseLeft> {MakeSongCurrentTooltip} - <MouseLeft><Drag> {ReorderSongsTooltip}\n<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft> {MakeSongCurrentTooltip} - <MouseLeft><Drag> {ReorderSongsTooltip}\n<MouseLeft><MouseLeft> {PropertiesSongTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerUp += (s, e) => Song_PointerUp(e, song);
             panel.ContainerPointerUpNotify += (s, e) => Song_PointerUp(e, song);
             panel.PointerDown += (s, e) => Song_PointerDown(s, e, song);
@@ -730,6 +734,8 @@ namespace FamiStudio
 
             var label = CreateLabel(panel, song.Name, true, icon.Right + marginX, 0, props.Left - icon.Right - marginX * 2, true);
             label.Font = song == App.SelectedSong ? fonts.FontMediumBold : fonts.FontMedium;
+            label.MouseDoubleClick += (s, e) => EditSongProperties(song);
+            label.SupportsDoubleClick = true;
         }
 
         private void Song_PointerDown(Control sender, PointerEventArgs e, Song song)
@@ -773,7 +779,7 @@ namespace FamiStudio
         private void CreateInstrumentControls(Instrument instrument)
         {
             var panel = CreateGradientPanel(instrument.Color, instrument);
-            panel.ToolTip = $"<MouseLeft> {SelectInstrumentTooltip} - <MouseLeft><Drag> {CopyReplaceInstrumentTooltip}\n<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft> {SelectInstrumentTooltip} - <MouseLeft><Drag> {CopyReplaceInstrumentTooltip}\n<MouseLeft><MouseLeft> {PropertiesInstrumentTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerUp += (s, e) => Instrument_PointerUp(e, instrument);
             panel.ContainerPointerUpNotify += (s, e) => Instrument_PointerUp(e, instrument);
             panel.PointerDown += (s, e) => Instrument_PointerDown(s, e, instrument);
@@ -828,6 +834,8 @@ namespace FamiStudio
 
             var label = CreateLabel(panel, instrument.Name, true, icon.Right + marginX, 0, lastEnv.Left - icon.Right - marginX * 2, true);
             label.Font = App.SelectedInstrument == instrument ? fonts.FontMediumBold : fonts.FontMedium;
+            label.MouseDoubleClick += (s, e) => EditInstrumentProperties(instrument);
+            label.SupportsDoubleClick = true;
         }
 
         private void InstrumentDpcm_PointerDown(Control sender, Instrument instrument, PointerEventArgs e, TextureAtlasRef image)
@@ -942,7 +950,7 @@ namespace FamiStudio
         private void CreateDpcmSampleControls(DPCMSample sample)
         {
             var panel = CreateGradientPanel(sample.Color, sample);
-            panel.ToolTip = $"<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft><MouseLeft> {PropertiesInstrumentTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerUp += (s, e) => DpcmSample_PointerUp(e, sample);
             panel.ContainerPointerUpNotify += (s, e) => DpcmSample_PointerUp(e, sample);
             panel.PointerDown += (s, e) => DpcmSample_PointerDown(s, e, sample);
@@ -977,7 +985,9 @@ namespace FamiStudio
             play.ClickOnMouseUp = true;
             play.SetSupportsDoubleClick(true);
 
-            CreateLabel(panel, sample.Name, true, icon.Right + marginX, 0, play.Left - icon.Right - marginX * 2, true);
+            var label = CreateLabel(panel, sample.Name, true, icon.Right + marginX, 0, play.Left - icon.Right - marginX * 2, true);
+            label.MouseDoubleClick += (s, e) => EditDPCMSampleProperties(sample);
+            label.SupportsDoubleClick = true;
         }
 
         private void DpcmSample_PointerDown(Control sender, PointerEventArgs e, DPCMSample sample)
@@ -1050,7 +1060,7 @@ namespace FamiStudio
         private void CreateArpeggioControls(Arpeggio arp)
         {
             var panel = CreateGradientPanel(arp.Color, arp);
-            panel.ToolTip = $"<MouseLeft> {SelectArpeggioTooltip} - <MouseLeft><Drag> {ReplaceArpeggioTooltip}\n<MouseRight> {MoreOptionsTooltip}";
+            panel.ToolTip = $"<MouseLeft> {SelectArpeggioTooltip} - <MouseLeft><Drag> {ReplaceArpeggioTooltip}\n<MouseLeft><MouseLeft> {PropertiesArpeggioTooltip} - <MouseRight> {MoreOptionsTooltip}";
             panel.PointerUp += (s, e) => Arpeggio_PointerUp(e, arp);
             panel.ContainerPointerUpNotify += (s, e) => Arpeggio_PointerUp(e, arp);
             panel.PointerDown += (s, e) => Arpeggio_PointerDown(s, e, arp);
@@ -1076,6 +1086,8 @@ namespace FamiStudio
 
             var label = CreateLabel(panel, arp.Name, true, icon.Right + marginX, 0, edit.Left - icon.Right - marginX * 2);
             label.Font = App.SelectedArpeggio == arp ? fonts.FontMediumBold : fonts.FontMedium;
+            label.MouseDoubleClick += (s, e) => EditArpeggioProperties(arp);
+            label.SupportsDoubleClick = true;
         }
         
         private void NoneArpeggio_PointerDown(Control sender, PointerEventArgs e)
