@@ -1558,12 +1558,49 @@ namespace FamiStudio
             song.InvalidateCumulativePatternCache();
             project.DeleteUnusedInstruments();
 
-            if (reverseDpcm)
+            if (project.Samples.Count > 0)
             {
-                foreach (var sample in project.Samples)
+                // For some imports, truncated versions of the same samples are imported.
+                // Only keep the longer versions instead of having duplicates.
+                var samples = project.Samples;
+                var replace = false;
+
+                for (int i = 0; i < samples.Count; i++)
                 {
-                    sample.ReverseBits = true;            
-                    sample.Process();
+                    for (int j = i + 1; j < samples.Count; j++)
+                    {
+                        var a = samples[i];
+                        var b = samples[j];
+                        var min = Math.Min(a.ProcessedData.Length, b.ProcessedData.Length);
+
+                        if (a.ProcessedData.AsSpan(0, min).SequenceEqual(b.ProcessedData.AsSpan(0, min)))
+                        {
+                            var trunc = a.ProcessedData.Length < b.ProcessedData.Length ? a : b;
+                            var full  = trunc == a ? b : a;
+
+                            project.ReplaceSampleInAllMappings(trunc, full);
+                            replace = true;
+                        }
+                    }
+                }
+
+                // Clean up if any samples were replaced above. keep names sequential.
+                if (replace)
+                {
+                    project.UnmapUnusedSamples();
+                    project.DeleteUnmappedSamples();
+
+                    for (int i = 0; i < samples.Count; i++)
+                        project.RenameSample(samples[i], $"Sample {i + 1}");
+                }
+
+                if (reverseDpcm)
+                {
+                    foreach (var sample in samples)
+                    {
+                        sample.ReverseBits = true;
+                        sample.Process();
+                    }
                 }
             }
 
