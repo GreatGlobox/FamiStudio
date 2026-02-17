@@ -388,6 +388,11 @@ namespace FamiStudio
                 vrc7Patch = value;
                 if (vrc7Patch != 0)
                     Array.Copy(Vrc7InstrumentPatch.Infos[vrc7Patch].data, vrc7PatchRegs, 8);
+
+                // Store the patch release, then set it to 5 if the bit is set.
+                vrc7Release = (byte)(vrc7PatchRegs[7] & 0x0f);
+                if (Vrc7SustainBitSet)
+                    vrc7PatchRegs[7] = (byte)((vrc7PatchRegs[7] & ~0x0F) | 0x05);
             }
         }
 

@@ -748,8 +748,10 @@ namespace FamiStudio
                         }
                         else if (instrument.IsVrc7)
                         {
-                            var sustainBitSet = instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
-                            lines.Add($"\t{db} {hexp}{(instrument.Vrc7Patch << 4):x2}, {hexp}{sustainBitSet:x2}");
+                            // Mesen seems to be ignoring this bit being set? TODO : Test on hardware.
+                            var sustainBit = instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
+
+                            lines.Add($"\t{db} {hexp}{sustainBit:x2}, {hexp}{(instrument.Vrc7Patch << 4):x2}, ");
                             lines.Add($"\t{db} {String.Join(",", instrument.Vrc7PatchRegs.Select(r => $"{hexp}{r:x2}"))}");
                         }
                         else if (instrument.IsEpsm)

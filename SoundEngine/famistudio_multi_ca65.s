@@ -5116,14 +5116,14 @@ famistudio_set_vrc7_instrument:
     @load_patch:
     ldx @chan_idx
     lda (@ptr),y
+    sta famistudio_chn_vrc7_sustain
+    iny
+    lda (@ptr),y
     sta famistudio_chn_vrc7_patch-FAMISTUDIO_VRC7_CH0_IDX,x
     bne @done
 
     @read_custom_patch:
     ldx #0
-    iny
-    lda (@ptr),y
-    sta famistudio_chn_vrc7_sustain
     iny
     @read_patch_loop:
         stx FAMISTUDIO_VRC7_REG_SEL
