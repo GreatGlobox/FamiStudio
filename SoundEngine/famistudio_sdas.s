@@ -893,7 +893,6 @@ famistudio_vrc6_saw_prev_hi    = famistudio_vrc6_saw_volume
 famistudio_chn_vrc7_prev_hi:      .ds 6
 famistudio_chn_vrc7_patch:        .ds 6
 famistudio_chn_vrc7_trigger:      .ds 6 ; bit 0 = new note triggered, bit 7 = note released.
-famistudio_chn_vrc7_sustain:      .ds 1 ; sustain bit overrides release.
 .endif
 .if FAMISTUDIO_EXP_EPSM
 .ifgt FAMISTUDIO_EXP_EPSM_RHYTHM_CNT
@@ -2518,8 +2517,9 @@ famistudio_update_vrc7_channel_sound:
 
     .local .tmp
     .local .pitch
-    .tmp   = famistudio_r0
-    .pitch = famistudio_ptr1
+    .tmp         = famistudio_r0
+    .sustain_set = famistudio_r3 
+    .pitch       = famistudio_ptr1
 
 .check_cut:
     lda famistudio_chn_note+FAMISTUDIO_VRC7_CH0_IDX,y
@@ -2652,7 +2652,7 @@ famistudio_update_vrc7_channel_sound:
 
     txa
     asl
-    ora famistudio_chn_vrc7_sustain
+    ora *.sustain_set
     ora *.pitch+1
     ora *.tmp
     sta famistudio_chn_vrc7_prev_hi, y
@@ -5102,6 +5102,7 @@ famistudio_set_vrc7_instrument:
     .ptr          = famistudio_ptr1
     .chan_idx     = famistudio_r0
     .update_flags = famistudio_r1 ; bit 7 = no attack, bit 6 = has set delayed cut
+    .sustain_set  = famistudio_r3 ;
    
     jsr famistudio_get_exp_inst_ptr
     bit *.update_flags
@@ -5123,7 +5124,7 @@ famistudio_set_vrc7_instrument:
     ldx #0
     iny
     lda [*.ptr],y
-    sta famistudio_chn_vrc7_sustain
+    sta *.sustain_set
     iny
     .famistudio_set_vrc7_instrument_read_patch_loop:
         stx FAMISTUDIO_VRC7_REG_SEL
