@@ -1014,6 +1014,7 @@ namespace FamiStudio
                 var menu = new List<ContextMenuOption>();
 
                 menu.Add(new ContextMenuOption("MenuDelete", DeleteSampleContext, () => { AskDeleteDPCMSample(sample); }, ContextMenuSeparator.After));
+                menu.Add(new ContextMenuOption("MenuDuplicate", DuplicateContext, () => { DuplicateDPCMSample(sample); }));
                 
                 if (Platform.IsDesktop)
                 {
@@ -3202,6 +3203,15 @@ namespace FamiStudio
             var newInst = App.Project.DuplicateInstrument(inst);
             RecreateAllControls();
             BlinkButton(newInst);
+            App.UndoRedoManager.EndTransaction();
+        }
+
+        private void DuplicateDPCMSample(DPCMSample sample)
+        {
+            App.UndoRedoManager.BeginTransaction(TransactionScope.Project);
+            var newSample = App.Project.DuplicateDPCMSample(sample);
+            RecreateAllControls();
+            BlinkButton(newSample);
             App.UndoRedoManager.EndTransaction();
         }
 

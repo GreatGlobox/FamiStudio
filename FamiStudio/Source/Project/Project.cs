@@ -360,6 +360,21 @@ namespace FamiStudio
             return sample;
         }
 
+        public DPCMSample DuplicateDPCMSample(DPCMSample sample)
+        {
+            var saveSerializer = new ProjectSaveBuffer(this);
+            sample.Serialize(saveSerializer);
+            var newSample = CreateDPCMSample(GenerateUniqueDPCMSampleName(sample.Name));
+            var loadSerializer = new ProjectLoadBuffer(this, saveSerializer.GetBuffer(), Project.Version);
+            loadSerializer.RemapId(sample.Id, newSample.Id);
+            newSample.Serialize(loadSerializer);
+            newSample.Name = GenerateUniqueDPCMSampleName(newSample.Name.TrimEnd(new[] { ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }));
+            MoveSample(newSample, sample);
+            ConditionalSortSamples();
+            ValidateIntegrity();
+            return newSample;
+        }
+
         public void TransposeDPCMMapping(int oldNote, int newNote, Instrument instrument)
         {
             foreach (var song in songs)
