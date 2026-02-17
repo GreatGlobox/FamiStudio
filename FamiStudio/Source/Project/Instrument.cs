@@ -56,6 +56,7 @@ namespace FamiStudio
         private byte   vrc7Patch = Vrc7InstrumentPatch.Bell;
         private byte[] vrc7PatchRegs = new byte[8];
         private bool   vrc7SustainBitSet;
+        private byte   vrc7Release = 5; // Default override.
 
         // EPSM
         private byte   epsmPatch = EpsmInstrumentPatch.Default;
@@ -77,6 +78,7 @@ namespace FamiStudio
         public Dictionary<int, DPCMSampleMapping> SamplesMapping => samplesMapping;
         public byte[] Vrc7PatchRegs => vrc7PatchRegs;
         public bool   Vrc7SustainBitSet { get => vrc7SustainBitSet; set => vrc7SustainBitSet = value; }
+        public byte   Vrc7Release { get => vrc7Release; set => vrc7Release = value; }
         public byte[] EpsmPatchRegs => epsmPatchRegs;
         public string FolderName { get => folderName; set => folderName = value; }
         public Folder Folder => string.IsNullOrEmpty(folderName) ? null : project.GetFolder(FolderType.Instrument, folderName);
@@ -1000,11 +1002,17 @@ namespace FamiStudio
                             for (int i = 0; i < vrc7PatchRegs.Length; i++)
                                 buffer.Serialize(ref vrc7PatchRegs[i]);
 
-                            // At version 19 (FamiStudio 4.5.0), we added the sustain bit setting for VRC7.
+                            // At version 19 (FamiStudio 4.5.0), we added the sustain bit setting for VRC7.                            
                             if (buffer.Version >= 19)
+                            {
                                 buffer.Serialize(ref vrc7SustainBitSet);
+                                buffer.Serialize(ref vrc7Release);
+                            }
                             else
+                            {
                                 vrc7SustainBitSet = true; // Set to true for older songs to avoid breaking them.
+                                vrc7Release = (byte)(vrc7PatchRegs[7] & 0x0f);
+                            }
                             break;
 
                         case ExpansionType.EPSM:
