@@ -161,6 +161,8 @@ namespace FamiStudio
                             for (int i = 0; i < 8; i++)
                                 instrumentLine += GenerateAttribute($"Vrc7Reg{i}", instrument.Vrc7PatchRegs[i]);
                         }
+
+                        instrumentLine += GenerateAttribute($"Vrc7SustainBit", instrument.Vrc7SustainBitSet);
                     }
                     else if (instrument.IsEpsm)
                     {
@@ -556,6 +558,8 @@ namespace FamiStudio
                                            instrument.Vrc7PatchRegs[i] = byte.Parse(regStr);
                                     }
                                 }
+
+                                if (parameters.TryGetValue("Vrc7SustainBit", out var vrc7SustainBit)) instrument.Vrc7SustainBitSet = bool.Parse(vrc7SustainBit);
                             }
                             else if (instrument.IsEpsm)
                             {
