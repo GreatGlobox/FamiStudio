@@ -751,6 +751,11 @@ namespace FamiStudio
                             // Mesen seems to be ignoring this bit being set? TODO : Test on hardware.
                             var sustainBit = instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
 
+                            // Restore the original release if using release override.
+                            // Note: The bit is supposed to override it.
+                            if (instrument.Vrc7SustainBitSet)
+                                instrument.Vrc7PatchRegs[7] = (byte)((instrument.Vrc7PatchRegs[7] & (~0x0f)) | (instrument.Vrc7Release & 0x0f));
+
                             lines.Add($"\t{db} {hexp}{sustainBit:x2}, {hexp}{(instrument.Vrc7Patch << 4):x2}, ");
                             lines.Add($"\t{db} {String.Join(",", instrument.Vrc7PatchRegs.Select(r => $"{hexp}{r:x2}"))}");
                         }
