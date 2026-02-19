@@ -2452,7 +2452,7 @@ famistudio_update_vrc7_channel_sound:
     jsr famistudio_vrc7_wait_reg_select
 
     lda famistudio_chn_vrc7_prev_hi, y
-    and #$ef ; Remove trigger
+    and #$cf ; Remove trigger + sustain
     sta famistudio_chn_vrc7_prev_hi, y
     sta FAMISTUDIO_VRC7_REG_WRITE
     jsr famistudio_vrc7_wait_reg_write
