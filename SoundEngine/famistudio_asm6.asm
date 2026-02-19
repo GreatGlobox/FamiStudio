@@ -2416,10 +2416,10 @@ cut:
     jsr famistudio_vrc7_wait_reg_select
 
     lda famistudio_chn_vrc7_sustain
-    bmi @override_stop
+    bmi override_stop
     lda famistudio_chn_vrc7_prev_hi, y
     and #$cf
-    bne @apply_cut
+    bne apply_cut
 
 override_stop:
     lda famistudio_chn_vrc7_prev_hi, y
