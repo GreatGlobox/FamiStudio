@@ -77,7 +77,7 @@ namespace FamiStudio
         public Envelope[] Envelopes => envelopes;
         public Dictionary<int, DPCMSampleMapping> SamplesMapping => samplesMapping;
         public byte[] Vrc7PatchRegs => vrc7PatchRegs;
-        public bool   Vrc7SustainBitSet { get => vrc7SustainBitSet; set { vrc7SustainBitSet = value; if (!value) vrc7OverrideStop = false; } }
+        public bool   Vrc7SustainBitSet { get => vrc7SustainBitSet; set => vrc7SustainBitSet = value; }
         public bool   Vrc7OverrideStop { get => vrc7OverrideStop; set => vrc7OverrideStop = value; }
         public byte[] EpsmPatchRegs => epsmPatchRegs;
         public string FolderName { get => folderName; set => folderName = value; }

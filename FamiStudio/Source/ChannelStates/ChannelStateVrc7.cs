@@ -81,7 +81,7 @@ namespace FamiStudio
         {
             if (note.IsStop)
             {
-                prevPeriodHi = (byte)(prevPeriodHi & ~(overrideStop ? 0x10 : 0x30));
+                prevPeriodHi = (byte)(prevPeriodHi & ~(0x30) | (overrideStop ? 0x20 : 0x00));
                 WriteVrc7Register(NesApu.VRC7_REG_HI_1 + channelIdx, prevPeriodHi);
             }
             else if (note.IsMusical)

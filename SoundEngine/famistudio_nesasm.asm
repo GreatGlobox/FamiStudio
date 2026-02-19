@@ -2465,14 +2465,16 @@ famistudio_update_vrc7_channel_sound:
 
     lda famistudio_chn_vrc7_sustain
     bmi .override_stop
-    lda #$cf
+    lda famistudio_chn_vrc7_prev_hi, y
+    and #$cf
     bne .apply_cut
 
 .override_stop:
-    lda #$ef
+    lda famistudio_chn_vrc7_prev_hi, y
+    and #$ef
+    ora #$20 ; Set sustain flag to override
 
 .apply_cut:
-    and famistudio_chn_vrc7_prev_hi, y
     sta famistudio_chn_vrc7_prev_hi, y
     sta FAMISTUDIO_VRC7_REG_WRITE
     jsr famistudio_vrc7_wait_reg_write
