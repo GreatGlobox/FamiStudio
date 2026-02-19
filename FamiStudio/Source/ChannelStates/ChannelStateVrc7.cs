@@ -8,6 +8,7 @@ namespace FamiStudio
         protected int  channelIdx = 0;
         protected byte vrc7Instrument = 0;
         protected byte prevPeriodHi;
+        protected bool overrideStop;
 
         public ChannelStateVrc7(IPlayerInterface player, int apuIdx, int channelType, int tuning) : base(player, apuIdx, channelType, tuning)
         {
@@ -80,7 +81,7 @@ namespace FamiStudio
         {
             if (note.IsStop)
             {
-                prevPeriodHi = (byte)(prevPeriodHi & ~(0x30));
+                prevPeriodHi = (byte)(prevPeriodHi & ~(overrideStop ? 0x10 : 0x30));
                 WriteVrc7Register(NesApu.VRC7_REG_HI_1 + channelIdx, prevPeriodHi);
             }
             else if (note.IsMusical)
@@ -105,8 +106,17 @@ namespace FamiStudio
                 var octave  = GetOctave(ref period);
                 var volume  = 15 - GetVolume();
 
-                // Note can end up null if playing notes and switching between channels quickly.
-                var sustain = note.Instrument != null && note.Instrument.Vrc7SustainBitSet ? 0x20 : 0x00;
+                byte sustain = 0x00;
+
+                // Instrument can end up null if playing notes and switching between channels quickly.
+                var inst = note.Instrument;
+                if (inst != null)
+                {
+                    overrideStop = inst.Vrc7OverrideStop;
+
+                    if (inst.Vrc7SustainBitSet)
+                        sustain = 0x20;
+                }
 
                 // Period hi bit at 0x10 : goes from 0->1 = attack, goes from 1->0 release
                 var periodLo = (byte)(period & 0xff);

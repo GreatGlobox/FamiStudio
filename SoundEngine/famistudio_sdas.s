@@ -2531,8 +2531,16 @@ famistudio_update_vrc7_channel_sound:
     sta FAMISTUDIO_VRC7_REG_SEL
     jsr famistudio_vrc7_wait_reg_select
 
-    lda famistudio_chn_vrc7_prev_hi, y
-    and #0xcf ; Remove trigger + sustain
+    lda famistudio_chn_vrc7_sustain
+    bmi @override_stop
+    lda #0xcf
+    bne @apply_cut
+
+.override_stop:
+    lda #0xef
+
+.apply_cut:
+    and famistudio_chn_vrc7_prev_hi, y
     sta famistudio_chn_vrc7_prev_hi, y
     sta FAMISTUDIO_VRC7_REG_WRITE
     jsr famistudio_vrc7_wait_reg_write

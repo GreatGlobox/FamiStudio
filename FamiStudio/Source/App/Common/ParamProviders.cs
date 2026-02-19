@@ -138,6 +138,7 @@ namespace FamiStudio
         static LocalizedString LevelLabel;
         static LocalizedString FeedbackLabel;
         static LocalizedString SustainBitLabel;
+        static LocalizedString OverrideStopLabel;
 
         // EPSM Labels
         static LocalizedString GeneralTab;
@@ -297,6 +298,8 @@ namespace FamiStudio
                         { GetValue = () => { return (instrument.Vrc7PatchRegs[1] & 0x20) >> 5; }, SetValue = (v) => { instrument.Vrc7PatchRegs[1] = (byte)((instrument.Vrc7PatchRegs[1] & (~0x20)) | ((v << 5) & 0x20)); instrument.Vrc7Patch = 0; }, TabName = "Carrier" });
                     paramInfos.Add(new InstrumentParamInfo(instrument, SustainBitLabel, 0, 1, 0)
                         { GetValue = () => { return instrument.Vrc7SustainBitSet ? 1 : 0; }, SetValue = (v) => { instrument.Vrc7SustainBitSet = v != 0; } }); 
+                    paramInfos.Add(new InstrumentParamInfo(instrument, OverrideStopLabel, 0, 1, 0)
+                        { GetValue = () => { return instrument.Vrc7OverrideStop ? 1 : 0; }, SetValue = (v) => { instrument.Vrc7OverrideStop = v != 0; }, IsEnabled = () => instrument.Vrc7SustainBitSet }); 
                     paramInfos.Add(new InstrumentParamInfo(instrument, TremoloLabel, 0, 1, (Vrc7InstrumentPatch.Infos[1].data[1] & 0x80) >> 7)
                         { GetValue = () => { return (instrument.Vrc7PatchRegs[1] & 0x80) >> 7; }, SetValue = (v) => { instrument.Vrc7PatchRegs[1] = (byte)((instrument.Vrc7PatchRegs[1] & (~0x80)) | ((v << 7) & 0x80)); instrument.Vrc7Patch = 0; }, TabName = "Carrier" });
                     paramInfos.Add(new InstrumentParamInfo(instrument, VibratoLabel, 0, 1, (Vrc7InstrumentPatch.Infos[1].data[1] & 0x40) >> 6)

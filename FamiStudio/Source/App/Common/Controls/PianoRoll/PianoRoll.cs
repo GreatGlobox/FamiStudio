@@ -9881,7 +9881,7 @@ namespace FamiStudio
             if (App == null)
                 return;
 
-            Debug.Assert(!window.IsAsyncDialogInProgress || captureOperation == CaptureOperation.None);
+            Debug.Assert((!window.IsAsyncDialogInProgress && !window.IsOutOfProcessDialogInProgress) || captureOperation == CaptureOperation.None);
 
             UpdateCaptureOperation(mouseLastX, mouseLastY, 1.0f, true);
             UpdateFollowMode();

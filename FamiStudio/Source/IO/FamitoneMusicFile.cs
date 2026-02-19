@@ -748,9 +748,9 @@ namespace FamiStudio
                         }
                         else if (instrument.IsVrc7)
                         {
-                            var sustainBit = instrument.Vrc7SustainBitSet ? 0x20 : 0x00; // Overrides release with a value of 5 if set.
+                            var overrides = (instrument.Vrc7SustainBitSet ? 0x20 : 0x00) | (instrument.Vrc7OverrideStop ? 0x80 : 0x00);
 
-                            lines.Add($"\t{db} {hexp}{sustainBit:x2}, {hexp}{(instrument.Vrc7Patch << 4):x2}, ");
+                            lines.Add($"\t{db} {hexp}{overrides:x2}, {hexp}{(instrument.Vrc7Patch << 4):x2}, ");
                             lines.Add($"\t{db} {String.Join(",", instrument.Vrc7PatchRegs.Select(r => $"{hexp}{r:x2}"))}");
                         }
                         else if (instrument.IsEpsm)
