@@ -8,6 +8,8 @@ To download older versions or view the release dates, please visit the [Github R
 
 This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
 
+Changes/Fixes:
+
 * Fixed an issue where certain PAL VGM imports would be too slow
 * Fixed an issue regarding certain VGM import data being incorrect
 * Fixed crash when right clicking a note when no arppegio (None) was selected
@@ -17,6 +19,8 @@ This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
 ## Version 4.5.2 (Hotfix)
 
 This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
+
+Changes/Fixes:
 
 * Fixed export dialog issue where "Loop Count" and "Duration" options could both be disabled
 * Fixed issue where a leading whitespace in the project name would break ROM / NSF export
