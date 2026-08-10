@@ -1357,8 +1357,16 @@ namespace FamiStudio
 
                                     if (note.Arpeggio == null)
                                     {
-                                        channelData.Add($"{lo}({instrumentArpeggioNames[instrument.ArpeggioEnvelope]})");
-                                        channelData.Add($"{hi}({instrumentArpeggioNames[instrument.ArpeggioEnvelope]})");
+                                        if (instrument != null)
+                                        {
+                                            channelData.Add($"{lo}({instrumentArpeggioNames[instrument.ArpeggioEnvelope]})");
+                                            channelData.Add($"{hi}({instrumentArpeggioNames[instrument.ArpeggioEnvelope]})");
+                                        }
+                                        else
+                                        {
+                                            channelData.Add($"{lo}({noArpeggioEnvelopeName})");
+                                            channelData.Add($"{hi}({noArpeggioEnvelopeName})");
+                                        }
                                     }
                                     else
                                     {
