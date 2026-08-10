@@ -4,6 +4,16 @@ Version history / release notes for each release.
 
 To download older versions or view the release dates, please visit the [Github Releases](https://github.com/BleuBleu/FamiStudio/releases) page.
 
+## Version 4.5.3 (Hotfix)
+
+This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
+
+* Fixed an issue where certain PAL VGM imports would be too slow
+* Fixed an issue regarding certain VGM import data being incorrect
+* Fixed crash when right clicking a note when no arppegio (None) was selected
+* Fixed some notes and envelopes in the Mega Man 2 demo song
+* Fixed NSF/ROM export issue introduced in 4.5.2
+
 ## Version 4.5.2 (Hotfix)
 
 This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
