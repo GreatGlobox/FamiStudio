@@ -1244,10 +1244,10 @@ namespace FamiStudio
                 if ((state.period != period) || (hasOctave && state.octave != octave) || (instrument != state.instrument) || force)
                 {
                     var noteTable = NesApu.GetNoteTableForChannelType(channel.Type, project.PalMode, project.ExpansionNumN163Channels, project.Tuning);
-                    var note = release ? Note.NoteRelease : (stop ? Note.NoteStop : state.note);
+                    var note = stop ? Note.NoteStop : state.note;
                     var finePitch = 0;
 
-                    if (!stop && !release && state.state != ChannelState.Stopped)
+                    if (!stop && state.state != ChannelState.Stopped)
                     {
                         if (channel.Type == ChannelType.Noise)
                             note = (period ^ 0x0f) + 32;
@@ -1266,6 +1266,11 @@ namespace FamiStudio
                             note = Math.Min(note, noteTable.Length - 1);
                             finePitch = period - noteTable[note];
                         }
+
+                        // The logic above needs to be done for fine pitch, otherwise
+                        // it resets to 0 on release, which is incorrect.
+                        if (release)
+                            note = Note.NoteRelease;
                     }
 
                     if (note < Note.MusicalNoteMin || note > Note.MusicalNoteMax)
