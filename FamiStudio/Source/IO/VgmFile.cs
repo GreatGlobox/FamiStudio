@@ -1594,12 +1594,11 @@ namespace FamiStudio
                         // some channels with HUGE pitch values (N163, VRC7).
                         finePitch = Math.Sign(finePitch) * (Math.Abs(finePitch) >> pitchShift);
 
-                        var pitch = release ? (sbyte)state.pitch : (sbyte)Utils.Clamp(finePitch, Note.FinePitchMin, Note.FinePitchMax);
+                        var pitch = (sbyte)Utils.Clamp(finePitch, Note.FinePitchMin, Note.FinePitchMax);
 
                         if (pitch != state.pitch)
                         {
-                            var pattern = channel.GetOrCreatePattern(p).GetOrCreateNoteAt(n);
-                            pattern.FinePitch = pitch;
+                            var pattern = channel.GetOrCreatePattern(p).GetOrCreateNoteAt(n).FinePitch = pitch;
                             state.pitch = pitch;
                         }
                     }
