@@ -68,6 +68,7 @@ namespace FamiStudio
         int capturePatternIdx = -1;
         int dragSeekPosition = -1;
         int selectionDragAnchorPatternIdx = -1;
+        int lastTappedChanIdx = -1;
         float zoom = DefaultZoom;
         float bitmapScale = 1.0f;
         float channelBitmapScale = 1.0f;
@@ -1759,12 +1760,15 @@ namespace FamiStudio
 
         private bool HandleTouchClickChannelName(int x, int y, bool doubleClick = false)
         {
+            // HACK: Since the sequencer doesn't use real buttons, we keep the last tapped channel index.
+            // This prevents an issue on mobile, where tapping two icons that are close together sends
+            // a double tap, toggling solo channel. Note: Usually only doable with small channel Y size.
             if (IsMouseInTrackName(x, y))
             {
                 var chanIdx = GetChannelIndexFromIconPos(x, y);
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick)
+                    if (doubleClick && lastTappedChanIdx == chanIdx) 
                     {
                         App.ToggleChannelSolo(chanIdx, true);
                     }
@@ -1772,13 +1776,15 @@ namespace FamiStudio
                     {
                         App.ToggleChannelActive(chanIdx);
                     }
+
+                    lastTappedChanIdx = chanIdx;
                     return true;
                 }
 
                 chanIdx = GetChannelIndexFromGhostIconPos(x, y);
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick) 
+                    if (doubleClick && lastTappedChanIdx == chanIdx) 
                     { 
                         App.ToggleChannelForceDisplayAll(chanIdx, true);
                     }
@@ -1786,10 +1792,13 @@ namespace FamiStudio
                     {
                         App.ToggleChannelForceDisplay(chanIdx);
                     }
+
+                    lastTappedChanIdx = chanIdx;
                     return true;
                 }
             }
 
+            lastTappedChanIdx = -1;
             return false;
         }
 
