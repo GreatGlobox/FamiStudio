@@ -1587,7 +1587,7 @@ namespace FamiStudio
 
                         // We scale all pitches changes (slides, fine pitch, pitch envelopes) for
                         // some channels with HUGE pitch values (N163, VRC7).
-                        finePitch >>= pitchShift;
+                        finePitch = Math.Sign(finePitch) * (Math.Abs(finePitch) >> pitchShift);
 
                         var pitch = (sbyte)Utils.Clamp(finePitch, Note.FinePitchMin, Note.FinePitchMax);
 
