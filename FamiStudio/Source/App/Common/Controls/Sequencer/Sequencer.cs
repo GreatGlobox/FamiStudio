@@ -68,7 +68,7 @@ namespace FamiStudio
         int capturePatternIdx = -1;
         int dragSeekPosition = -1;
         int selectionDragAnchorPatternIdx = -1;
-        int lastTappedChanIdx = -1;
+        int lastChanIdx = -1;
         float zoom = DefaultZoom;
         float bitmapScale = 1.0f;
         float channelBitmapScale = 1.0f;
@@ -1410,6 +1410,8 @@ namespace FamiStudio
             if (e.Left && IsMouseInTrackName(e.X, e.Y))
             { 
                 var chanIdx = GetChannelIndexFromIconPos(e.X, e.Y);
+                lastChanIdx = chanIdx;
+
                 if (chanIdx >= 0)
                 {
                     App.ToggleChannelActive(chanIdx);
@@ -1766,7 +1768,9 @@ namespace FamiStudio
             if (IsMouseInTrackName(x, y))
             {
                 var chanIdx = GetChannelIndexFromIconPos(x, y);
-                var canToggleSolo = Platform.IsDesktop || lastTappedChanIdx == chanIdx;
+                var canToggleSolo = lastChanIdx == chanIdx;
+                lastChanIdx = chanIdx;
+
                 if (chanIdx >= 0)
                 {
                     if (doubleClick && canToggleSolo)
@@ -1777,8 +1781,6 @@ namespace FamiStudio
                     {
                         App.ToggleChannelActive(chanIdx);
                     }
-
-                    lastTappedChanIdx = chanIdx;
                     return true;
                 }
 
@@ -1793,13 +1795,10 @@ namespace FamiStudio
                     {
                         App.ToggleChannelForceDisplay(chanIdx);
                     }
-
-                    lastTappedChanIdx = chanIdx;
                     return true;
                 }
             }
 
-            lastTappedChanIdx = -1;
             return false;
         }
 
