@@ -1766,9 +1766,10 @@ namespace FamiStudio
             if (IsMouseInTrackName(x, y))
             {
                 var chanIdx = GetChannelIndexFromIconPos(x, y);
+                var canToggleSolo = Platform.IsDesktop || lastTappedChanIdx == chanIdx;
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick && lastTappedChanIdx == chanIdx) 
+                    if (doubleClick && canToggleSolo)
                     {
                         App.ToggleChannelSolo(chanIdx, true);
                     }
@@ -1784,7 +1785,7 @@ namespace FamiStudio
                 chanIdx = GetChannelIndexFromGhostIconPos(x, y);
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick && lastTappedChanIdx == chanIdx) 
+                    if (doubleClick && canToggleSolo)
                     { 
                         App.ToggleChannelForceDisplayAll(chanIdx, true);
                     }
