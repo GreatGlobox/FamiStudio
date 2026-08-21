@@ -27,6 +27,7 @@ namespace FamiStudio
         private Task playingTask;
         private int inputSampleRate;
         private int outputSampleRate;
+        private short[] mixSamples;
         private short[] lastSamples;
         private double resampleIndex = 0.0;
         private volatile ImmediateData immediateData = null;
@@ -133,7 +134,14 @@ namespace FamiStudio
                 var newSamples = bufferFill(out var done);
                 if (newSamples != null)
                 {
-                    newSamples = MixImmediateData(newSamples); 
+                    // Use separate collection during MixImmediateData. Modifying the buffer
+                    // in place causes the oscilloscope to react.
+                    if (mixSamples?.Length != newSamples.Length)
+                        mixSamples = new short[newSamples.Length];
+
+                    Array.Copy(newSamples, mixSamples, newSamples.Length);
+
+                    newSamples = MixImmediateData(mixSamples);
                     lastSamples = WaveUtils.ResampleStream(lastSamples, newSamples, inputSampleRate, outputSampleRate, stereo, ref resampleIndex);
                     audioTrack.Write(lastSamples, 0, lastSamples.Length, WriteMode.Blocking);
                 }
