@@ -948,6 +948,7 @@ namespace FamiStudio
                                 var iconY = patternHeaderSizeY / 2 + channelSizeY / 2 - iconH / 2;
 
                                 f.PushTranslation(0, py);
+                                f.DrawTextureAtlas(bmpMenuInstance, iconX + 1 * scale, iconY + 1 * scale, scale, Theme.BlackColor); // Drop shadow.
                                 f.DrawTextureAtlas(bmpMenuInstance, iconX, iconY, scale, Theme.WhiteColor);
                                 f.PopTransform();
                             }
@@ -2069,7 +2070,7 @@ namespace FamiStudio
                 {
                     // TODO: Add the correct icon to make unique rather than the merge one.
                     if (UpdateSelectedPatternRefCounts())
-                        menu.Insert(1, new ContextMenuOption("MenuInstance", MakePatternsUniqueLabel, () => { MakeSelectedPatternsUnique(); }));
+                        menu.Insert(1, new ContextMenuOption("MenuUnlink", MakePatternsUniqueLabel, () => { MakeSelectedPatternsUnique(); }));
 
                     menu.Insert(1, new ContextMenuOption("MenuInstance", MergeIdenticalPatternsLabel, () => { MergeSelectedIdenticalPatterns(); }));
                 }
