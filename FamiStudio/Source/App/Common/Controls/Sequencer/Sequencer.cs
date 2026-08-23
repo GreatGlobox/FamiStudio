@@ -362,7 +362,7 @@ namespace FamiStudio
                 // Keep size a multiple of 2 at 150%, multiple of 4 at 125%/175%, etc.
                 var frac = Utils.Frac(DpiScaling.Window);
                 var divider = (frac == 0.25f || frac == 0.75f) ? 4 : (frac == 0.5f) ? 2 : 1;
-                var minChannelSize = Utils.RoundUp(21, divider);
+                var minChannelSize = Utils.RoundUp(30, divider);
                 var idealSequencerHeight = (int)Math.Round(ParentWindow.Height / DpiScaling.Window * Settings.IdealSequencerSize / 100);
                         
                 channelSizeY = visibleChannelCount > 0 ? Math.Max(Utils.RoundDown(idealSequencerHeight / visibleChannelCount, divider), minChannelSize) : minChannelSize;
@@ -464,8 +464,8 @@ namespace FamiStudio
             selectionMin = min; 
             selectionMax = max;
             timeOnlySelection = timeOnly;
-            SelectionChanged?.Invoke();
             UpdateSelectedPatternRefCounts();
+            SelectionChanged?.Invoke();
         }
 
         private void EnsureSelectionInclude(PatternLocation location)
@@ -535,8 +535,9 @@ namespace FamiStudio
             bmpForceDisplay = g.GetTextureAtlasRef("GhostSmall");
             bmpLoopPoint = g.GetTextureAtlasRef("LoopSmallFill");
             bmpInstantiate = g.GetTextureAtlasRef("Instance");
-            bmpDuplicate = g.GetTextureAtlasRef("Duplicate");
+            bmpDuplicate = g.GetTextureAtlasRef("MenuCopy");
             bmpDuplicateMove = g.GetTextureAtlasRef("DuplicateMove");
+            bmpMenuInstance = g.GetTextureAtlasRef("MenuInstance");
 
             if (Platform.IsMobile)
             {
@@ -546,7 +547,6 @@ namespace FamiStudio
 
             bmpShyOn = g.GetTextureAtlasRef("ShyOn");
             bmpShyOff = g.GetTextureAtlasRef("ShyOff");
-            bmpMenuInstance = g.GetTextureAtlasRef("MenuInstance");
 
             seekGeometry = new float[]
             {
@@ -864,13 +864,13 @@ namespace FamiStudio
                         if (rowIdxDelta != 0)
                             bmpCopy = (duplicate || instance) ? bmpDuplicate : bmpDuplicateMove;
                         else
-                            bmpCopy = duplicate ? bmpDuplicate : (instance ? bmpInstantiate : null);
+                            bmpCopy = duplicate ? bmpDuplicate : (instance ? bmpMenuInstance : null);
 
                         c.PushTranslation(pt.X - channelNameSizeX, y);
                         c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, channelSizeY, selectedPatternVisibleColor, Theme.BlackColor);
 
                         if (bmpCopy != null)
-                            c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                            c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, patternHeaderSizeY / 2 + channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
 
                         // Left side
                         for (int p = patternIdx - 1; p >= selectionMin.PatternIndex + patternIdxDelta && p >= 0; p--)
@@ -881,7 +881,7 @@ namespace FamiStudio
                             c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, channelSizeY, selectedPatternVisibleColor, Theme.BlackColor);
 
                             if (bmpCopy != null)
-                                c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, patternHeaderSizeY / 2 + channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
                         }
 
                         // Right side
@@ -892,7 +892,7 @@ namespace FamiStudio
                             c.FillAndDrawRectangle(anchorOffsetRightX, 0, anchorOffsetRightX + patternSizeX, channelSizeY, selectedPatternVisibleColor, Theme.BlackColor);
 
                             if (bmpCopy != null)
-                                c.DrawTextureAtlas(bmpCopy, anchorOffsetRightX + patternSizeX / 2 - bmpSize / 2, channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                c.DrawTextureAtlas(bmpCopy, anchorOffsetRightX + patternSizeX / 2 - bmpSize / 2, patternHeaderSizeY / 2 + channelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
 
                             anchorOffsetRightX += patternSizeX;
                         }
@@ -942,15 +942,13 @@ namespace FamiStudio
 
                             if (!dragCapture && valid && patternRefCounts.TryGetValue(pattern, out var count) && count > 1)
                             {
-                                var scale = bitmapScale * (Platform.IsMobile ? 0.25f : 1.0f);
-                                var iconW = bmpMenuInstance.ElementSize.Width  * scale;
-                                var iconH = bmpMenuInstance.ElementSize.Height * scale;
-                                var iconX = sx / 2 - iconW / 2;
-                                var iconY = patternHeaderSizeY / 2 + channelSizeY / 2 - iconH / 2;
+                                // TODO: Use correct icon for mobile in place of original instantiate one, rather than resizing.
+                                var scale   = bitmapScale / (Platform.IsMobile ? 4 : 1);
+                                var bmpSize = DpiScaling.ScaleCustom(bmpMenuInstance.ElementSize.Width, scale);
 
                                 f.PushTranslation(0, py);
-                                f.DrawTextureAtlas(bmpMenuInstance, iconX + 1 * scale, iconY + 1 * scale, scale, Theme.BlackColor); // Drop shadow.
-                                f.DrawTextureAtlas(bmpMenuInstance, iconX, iconY, scale, Theme.WhiteColor);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2 + scale, patternHeaderSizeY / 2 + channelSizeY / 2 - bmpSize / 2 + scale, scale, Theme.BlackColor);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2, patternHeaderSizeY / 2 + channelSizeY / 2 - bmpSize / 2, scale, Theme.WhiteColor);
                                 f.PopTransform();
                             }
                         }
@@ -2077,11 +2075,11 @@ namespace FamiStudio
 
                 if (IsPatternSelected(location))
                 {
-                    // TODO: Add the correct icon to make unique rather than the merge one.
                     if (UpdateSelectedPatternRefCounts())
                         menu.Insert(1, new ContextMenuOption("MenuUnlink", MakePatternsUniqueLabel, () => { MakeSelectedPatternsUnique(); }));
-
-                    menu.Insert(1, new ContextMenuOption("MenuInstance", MergeIdenticalPatternsLabel, () => { MergeSelectedIdenticalPatterns(); }));
+                    
+                    if (SelectionContainsMultiplePatterns())
+                        menu.Insert(1, new ContextMenuOption("MenuInstance", MergeIdenticalPatternsLabel, () => { MergeSelectedIdenticalPatterns(); }));
                 }
 
                 if (menu.Count > 0)
@@ -2132,6 +2130,9 @@ namespace FamiStudio
 
             EndCaptureOperation(x, y);
             SetMouseLastPos(x, y);
+
+            if ((IsPointInPatternArea(x, y) || IsPointInHeader(x, y)) && IsSelectionValid())
+                UpdateSelectedPatternRefCounts();
         }
 
         protected override void OnTouchFling(PointerEventArgs e)
@@ -2237,6 +2238,9 @@ namespace FamiStudio
             // - Context menu : Pattern properties, etc. (if in selection)
 
             AbortCaptureOperation();
+
+            if ((IsPointInPatternArea(x, y) || IsPointInHeader(x, y)) && !IsSelectionValid())
+                UpdateSelection(x, y, false);
 
             if (HandleTouchLongPressChannelName(x, y)) goto Handled;
             if (HandleTouchLongPressHeader(x, y)) goto Handled;
@@ -3218,8 +3222,8 @@ namespace FamiStudio
 
             if (middle)
                 DoScroll(e.X - mouseLastX, e.Y - mouseLastY);
-            else if (e.Right && patternRefCounts.Count > 0 && (captureOperation == CaptureOperation.SelectRectangle || captureOperation == CaptureOperation.SelectColumn))
-                patternRefCounts.Clear();
+            else if (e.Right && patternRefCounts?.Count > 0 && (captureOperation == CaptureOperation.SelectRectangle || captureOperation == CaptureOperation.SelectColumn))
+                patternRefCounts?.Clear();
 
             UpdateHover(e);
             UpdateToolTip(e);
