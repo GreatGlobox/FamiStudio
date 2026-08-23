@@ -30,7 +30,8 @@ namespace FamiStudio
         // Version 17 = FamiStudio 4.3.0 (Tuning)
         // Version 18 = FamiStudio 4.4.0 (FDS multi-wave)
         // Version 19 = FamiStudio 4.5.0 (VRC7 release / stop override, groove padding serialization, project export settings)
-        public const int Version = 19;
+        // Version 20 = FamiStudio 4.6.0 (DPCM waveform inversion)
+        public const int Version = 20;
         public const int MaxMappedSampleSize = 0x40000;
         public const int MaxDPCMBanks = 64;
         public const int MaxSampleAddress = 255 * 64;

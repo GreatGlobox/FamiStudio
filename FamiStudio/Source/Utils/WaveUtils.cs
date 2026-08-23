@@ -191,6 +191,12 @@ namespace FamiStudio
                 data[i] = (byte)(data[i] ^ 0xFF);
         }
 
+        public static void InvertWaveform(short[] samples)
+        {
+            for (int i = 0; i < samples.Length; i++)
+                samples[i] = (short)~samples[i];
+        }
+
         static public void WaveToDpcm(short[] wave, int minSample, int maxSample, float waveSampleRate, float dpcmSampleRate, int dpcmCounterStart, WaveToDpcmRoundingMode roundMode, out byte[] dpcm)
         {
             if (wave.Length == 0)

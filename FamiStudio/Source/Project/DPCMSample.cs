@@ -167,6 +167,7 @@ namespace FamiStudio
             volumeAdjust = 100;
             finePitch = 1.0f;
             trimZeroVolume = false;
+            invertWaveform = false;
             reverseBits = false;
             palProcessing = false;
             paddingMode = DPCMPaddingType.Unpadded;
@@ -204,6 +205,7 @@ namespace FamiStudio
                     if (reverseBits)
                         WaveUtils.ReverseDpcmBits(processedData);
 
+                    // Waveform inversion.
                     if (invertWaveform)
                         WaveUtils.InvertDpcmWaveform(processedData);
                 }
@@ -215,6 +217,10 @@ namespace FamiStudio
                     if (SourceDataIsWav)
                     {
                         sourceWavData = WaveUtils.CopyWave(SourceWavData.Samples);
+
+                        // Waveform inversion.
+                        if (invertWaveform)
+                            WaveUtils.InvertWaveform(sourceWavData);
                     }
                     else
                     {
@@ -225,6 +231,13 @@ namespace FamiStudio
                         {
                             dmcData = WaveUtils.CopyDpcm(dmcData);
                             WaveUtils.ReverseDpcmBits(dmcData);
+                        }
+
+                        // Waveform inversion.
+                        if (invertWaveform)
+                        {
+                            dmcData = WaveUtils.CopyDpcm(dmcData);
+                            WaveUtils.InvertDpcmWaveform(dmcData);
                         }
 
                         WaveUtils.DpcmToWave(dmcData, dmcInitialValueDiv2, out sourceWavData);
@@ -290,9 +303,6 @@ namespace FamiStudio
                     var volumeScaledInitialDmcValue = GetVolumeScaleDmcInitialValueDiv2();
 
                     WaveUtils.WaveToDpcm(sourceWavData, minProcessingSample, maxProcessingSample, sourceSampleRate, targetSampleRate, volumeScaledInitialDmcValue, roundMode, out processedData);
-                    
-                    if (invertWaveform)
-                        WaveUtils.InvertDpcmWaveform(processedData);
                 }
 
                 // If trimming is enabled, remove any extra 0x55 / 0xaa from the beginning and end.
@@ -491,6 +501,10 @@ namespace FamiStudio
                 buffer.Serialize(ref reverseBits);
                 buffer.Serialize(ref trimZeroVolume);
                 buffer.Serialize(ref palProcessing);
+
+                // At version 20 (FamiStudio 4.6.0) we added an invert option for the processed waveform.
+                if (buffer.Version >= 20)
+                    buffer.Serialize(ref invertWaveform);
 
                 for (int i = 0; i < volumeEnvelope.Length; i++)
                 {
