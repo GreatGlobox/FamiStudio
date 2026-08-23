@@ -587,6 +587,7 @@ namespace FamiStudio
         static LocalizedString ProcessPalLabel;
         static LocalizedString TrimZeroVolumeLabel;
         static LocalizedString ReverseBitsLabel;
+        static LocalizedString InvertWaveformLabel;
         static LocalizedString BankNumberLabel;
 
         // tooltips
@@ -599,6 +600,7 @@ namespace FamiStudio
         static LocalizedString ProcessPalTooltip;
         static LocalizedString TrimZeroVolumeTooltip;
         static LocalizedString ReverseBitsTooltip;
+        static LocalizedString InvertWaveformTooltip;
         static LocalizedString BankNumberTooltip;
 
         #endregion
@@ -628,6 +630,8 @@ namespace FamiStudio
                     { GetValue = () => { return  sample.PalProcessing ? 1 : 0; }, SetValue = (v) => { sample.PalProcessing = v != 0; sample.Process(); } },
                 new DPCMSampleParamInfo(sample, TrimZeroVolumeLabel, 0, 1, 0, TrimZeroVolumeTooltip)
                     { GetValue = () => { return sample.TrimZeroVolume ? 1 : 0; }, SetValue = (v) => { sample.TrimZeroVolume = v != 0; sample.Process(); } },
+                new DPCMSampleParamInfo(sample, InvertWaveformLabel, 0, 1, 0, InvertWaveformTooltip)
+                    { GetValue = () => { return sample.InvertWaveform ? 1 : 0; }, SetValue = (v) => { { sample.InvertWaveform = v != 0; sample.Process(); } } },
                 new DPCMSampleParamInfo(sample, ReverseBitsLabel, 0, 1, 0, ReverseBitsTooltip)
                     { GetValue = () => { return !sample.SourceDataIsWav && sample.ReverseBits ? 1 : 0; }, SetValue = (v) => { if (!sample.SourceDataIsWav) { sample.ReverseBits = v != 0; sample.Process(); } }, IsEnabled = () => { return !sample.SourceDataIsWav; } },
                 new DPCMSampleParamInfo(sample, BankNumberLabel, 0, Project.MaxDPCMBanks - 1, 0, BankNumberTooltip)

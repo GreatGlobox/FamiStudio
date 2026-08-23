@@ -32,6 +32,7 @@ namespace FamiStudio
         private int   paddingMode = DPCMPaddingType.PadTo16Bytes;
         private int   dmcInitialValueDiv2 = NesApu.DACDefaultValueDiv2;
         private bool  reverseBits;
+        private bool  invertWaveform;
         private bool  trimZeroVolume;
         private bool  palProcessing;
         private SampleVolumePair[] volumeEnvelope = new SampleVolumePair[4]
@@ -66,6 +67,7 @@ namespace FamiStudio
         public int      SampleRate          { get => sampleRate;          set => sampleRate      = value; }
         public int      PreviewRate         { get => previewRate;         set => previewRate     = value; }
         public bool     ReverseBits         { get => reverseBits;         set => reverseBits     = value; }
+        public bool     InvertWaveform      { get => invertWaveform;      set => invertWaveform  = value; }
         public bool     TrimZeroVolume      { get => trimZeroVolume;      set => trimZeroVolume  = value; }
         public bool     PalProcessing       { get => palProcessing;       set => palProcessing   = value; }
         public int      VolumeAdjust        { get => volumeAdjust;        set => volumeAdjust    = value; }
@@ -201,6 +203,9 @@ namespace FamiStudio
                     // Bit reverse.
                     if (reverseBits)
                         WaveUtils.ReverseDpcmBits(processedData);
+
+                    if (invertWaveform)
+                        WaveUtils.InvertDpcmWaveform(processedData);
                 }
                 else
                 {
@@ -285,6 +290,9 @@ namespace FamiStudio
                     var volumeScaledInitialDmcValue = GetVolumeScaleDmcInitialValueDiv2();
 
                     WaveUtils.WaveToDpcm(sourceWavData, minProcessingSample, maxProcessingSample, sourceSampleRate, targetSampleRate, volumeScaledInitialDmcValue, roundMode, out processedData);
+                    
+                    if (invertWaveform)
+                        WaveUtils.InvertDpcmWaveform(processedData);
                 }
 
                 // If trimming is enabled, remove any extra 0x55 / 0xaa from the beginning and end.
