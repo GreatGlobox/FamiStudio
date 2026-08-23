@@ -960,6 +960,8 @@
     <EmbeddedResource Include="Resources\Atlas\MenuToggleSlide@2x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuTrash.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuTrash@2x.tga" />
+    <EmbeddedResource Include="Resources\Atlas\MenuUnlink.tga" />
+    <EmbeddedResource Include="Resources\Atlas\MenuUnlink@2x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuWave.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuWave@2x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MessageCancel.tga" />

@@ -280,7 +280,7 @@ namespace FamiStudio
         private readonly string[] nsfFormats = ["NSF", "NSFe"];
 
         // ROM / NSF Export Strings
-        private readonly string[] romFdsTypes = ["NES ROM", "FDS Disk"];
+        private readonly string[] romFdsTypes;
         private readonly string[] romFdsModes = ["NTSC", "PAL"];
 
         // VGM Export Strings
@@ -297,6 +297,9 @@ namespace FamiStudio
             
             app = win.FamiStudio;
             project = app.Project;
+
+            // Dropdown lists that need to be localised.
+            romFdsTypes = [FormatRomMessage, FormatFdsMessage];
 
             // Make copies of some current grid settings to work on.
             // NOTE: These need to be initialised before the dialog.
@@ -446,8 +449,9 @@ namespace FamiStudio
                         new ColumnDesc(PanColumn, 0.6f, 0, 100, (o) => FormattableString.Invariant($"{(int)o} %")) 
                     }, GetDefaultChannelsGridData(false, false, app.SelectedSong, out _), 7, ChannelGridTooltip); // 11
                     page.AddButton(null, ResetDefaultsLabel.Format(FormatAudioMessage.ToString().ToLowerInvariant())); // 12
-                    page.SetPropertyEnabled( 3, false);
-                    page.SetPropertyEnabled( 6, false);
+                    page.SetPropertyEnabled( 3, audioSettings.Format == "MP3" || audioSettings.Format == "Ogg Vorbis");
+                    page.SetPropertyEnabled( 5, audioSettings.LoopMode != DurationOption);
+                    page.SetPropertyEnabled( 6, audioSettings.LoopMode == DurationOption);
                     page.SetPropertyVisible( 8, Platform.IsDesktop); // No separate files on mobile.
                     page.SetPropertyVisible( 9, Platform.IsDesktop); // No separate intro on mobile.
                     page.SetPropertyEnabled(10, !project.OutputsStereoAudio); // Force stereo for EPSM.
@@ -1012,6 +1016,7 @@ namespace FamiStudio
                     var exportSettings = project.AudioExportConfig;
 
                     exportSettings.SongId        = song.Id;
+                    exportSettings.Format        = props.GetPropertyValue<string>(1);
                     exportSettings.SampleRate    = props.GetPropertyValue<string>(2);
                     exportSettings.BitRate       = props.GetPropertyValue<string>(3);
                     exportSettings.LoopMode      = loopMode;
@@ -1606,7 +1611,7 @@ namespace FamiStudio
         {
             if (propIdx == 6 && click == ClickType.Button)
             {
-                Platform.MessageBoxAsync(dialog.ParentWindow, ResetMessage.Format(ExportFormatNames[3]), ResetTitle, MessageBoxButtons.YesNo, (r) =>
+                Platform.MessageBoxAsync(dialog.ParentWindow, ResetMessage.Format(ExportFormatNames[4]), ResetTitle, MessageBoxButtons.YesNo, (r) =>
                 {
                     if (r == DialogResult.Yes)
                     {
@@ -1671,6 +1676,9 @@ namespace FamiStudio
                     );
 
                     settings.MidiInstruments = midiInstSettings;
+
+                    for (int i = 0; i < instrumentMapping.Length; i++)
+                        instrumentMapping[i] = Array.IndexOf(MidiFileReader.MidiInstrumentNames, props.GetPropertyValue<string>(5, i, 1));
 
                     new MidiFileWriter().Save(project, filename, song.Id, instrumentMode, instrumentMapping, velocity, slideNotes, pitchRange);
 
@@ -1757,7 +1765,7 @@ namespace FamiStudio
 
             if (propIdx == 9 && click == ClickType.Button)
             {
-                Platform.MessageBoxAsync(dialog.ParentWindow, ResetMessage.Format(ExportFormatNames[3]), ResetTitle, MessageBoxButtons.YesNo, (r) =>
+                Platform.MessageBoxAsync(dialog.ParentWindow, ResetMessage.Format(ExportFormatNames[5]), ResetTitle, MessageBoxButtons.YesNo, (r) =>
                 {
                     if (r == DialogResult.Yes)
                     {

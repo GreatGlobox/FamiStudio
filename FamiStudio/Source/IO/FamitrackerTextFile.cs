@@ -565,6 +565,12 @@ namespace FamiStudio
                     if (env == null || env.IsEmpty(i))
                         continue;
 
+                    if (i != EnvelopeType.N163Waveform && i != EnvelopeType.FdsWaveform && env?.Length > 253)
+                    {
+                        Log.LogMessage(LogSeverity.Warning, $"Instrument '{instrument.Name}' {EnvelopeType.InternalNames[i].ToLowerInvariant()} envelope has {env.Length} values. FamiTracker only supports up to 253 values. Truncating.");
+                        env.Length = 253;
+                    }
+
                     uint crc = env.CRC;
 
                     if (uniqueEnvelopes[instrument.IsExpansionInstrument ? 1 : 0, i].TryGetValue(crc, out var existingEnv))
@@ -882,6 +888,12 @@ namespace FamiStudio
                 }
                 else if (instrument.IsN163)
                 {
+                    if (instrument.N163WaveSize > 32) 
+                    {
+                        uniqueWarnings.Add($"N163 Instrument \"{instrument.Name}\" wave size ({instrument.N163WaveSize}) is bigger than the maximum allowed (32). Truncating.");
+                        instrument.N163WaveSize = 32;
+                    }
+
                     instrument.PerformPostLoadActions(); // Safety.
                     instrument.BuildWaveformsAndWaveIndexEnvelope(out var waves, out var wavIndexEnv, false);
 

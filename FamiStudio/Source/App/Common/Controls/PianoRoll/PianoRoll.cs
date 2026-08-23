@@ -546,7 +546,9 @@ namespace FamiStudio
         LocalizedString ToggleSelectedReleaseContext;
         LocalizedString MakeStopNoteContext;
         LocalizedString ReplaceAllInstrumentContext;
+        LocalizedString ReplaceAllArpeggioContext;
         LocalizedString ReplaceSpecificInstrumentContext;
+        LocalizedString ArpeggioNoneContext;
         LocalizedString MakeInstrumentCurrentContext;
         LocalizedString SetSnapContext;
         LocalizedString SelectNoteRangeContext;
@@ -6984,8 +6986,12 @@ namespace FamiStudio
                             menu.Add(new ContextMenuOption("MenuStopNote", MakeStopNoteContext, () => { ConvertToStopNote(noteLocation, note); }));
                         if (App.SelectedInstrument != null && Song.Channels[editChannel].SupportsInstrument(App.SelectedInstrument))
                             menu.Add(new ContextMenuOption("MenuReplaceSelection", ReplaceAllInstrumentContext.Format(App.SelectedInstrument), () => { ReplaceSelectionInstrument(App.SelectedInstrument, new Point(x, y), null); }));
-                        if (App.SelectedInstrument != null && Song.Channels[editChannel].SupportsInstrument(App.SelectedInstrument) && note.Instrument != null)
+                        if (App.SelectedInstrument != null && Song.Channels[editChannel].SupportsInstrument(App.SelectedInstrument) && note.Instrument != null && App.SelectedInstrument != note.Instrument)
                             menu.Add(new ContextMenuOption("MenuReplaceSelection", ReplaceSpecificInstrumentContext.Format(note.Instrument, App.SelectedInstrument), () => { ReplaceSelectionInstrument(App.SelectedInstrument, new Point(x, y), note.Instrument); }));
+                        if (App.SelectedInstrument != null && Song.Channels[editChannel].SupportsArpeggios)
+                            menu.Add(new ContextMenuOption("MenuReplaceSelection", ReplaceAllArpeggioContext.Format(App.SelectedArpeggio?.Name ?? ArpeggioNoneContext), () => { ReplaceSelectionArpeggio(App.SelectedArpeggio, new Point(x, y), null); }));
+                        if (App.SelectedInstrument != null && Song.Channels[editChannel].SupportsArpeggios && App.SelectedArpeggio != note.Arpeggio)
+                            menu.Add(new ContextMenuOption("MenuReplaceSelection", ReplaceSpecificInstrumentContext.Format(note.Arpeggio?.Name ?? ArpeggioNoneContext, App.SelectedArpeggio?.Name ?? ArpeggioNoneContext), () => { ReplaceSelectionArpeggio(App.SelectedArpeggio, new Point(x, y), note.Arpeggio); }));
                         if (note.Instrument != null)
                             menu.Add(new ContextMenuOption("MenuEyedropper", MakeInstrumentCurrentContext, () => { Eyedrop(note); }));
 
@@ -8375,7 +8381,7 @@ namespace FamiStudio
             }
         }
 
-        public void ReplaceSelectionArpeggio(Arpeggio arpeggio, Point pos, bool forceInSelection = false)
+        public void ReplaceSelectionArpeggio(Arpeggio arpeggio, Point pos, Arpeggio matchArpeggio = null, bool forceInSelection = false)
         {
             if (editMode == EditionMode.Channel)
             {
@@ -8392,7 +8398,7 @@ namespace FamiStudio
                     {
                         TransformNotes(selectionMin, selectionMax, true, true, false, (note, idx) =>
                         {
-                            if (note != null && note.IsMusical)
+                            if (note != null && note.IsMusical && (matchArpeggio == null || note.Arpeggio == matchArpeggio))
                                 note.Arpeggio = arpeggio;
                             return note;
                         });

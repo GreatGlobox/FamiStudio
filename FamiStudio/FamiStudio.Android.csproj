@@ -911,6 +911,7 @@
     <EmbeddedResource Include="Resources\Atlas\MenuToggleRelease@4x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuToggleSlide@4x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuTrash@4x.tga" />
+    <EmbeddedResource Include="Resources\Atlas\MenuUnlink@4x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MenuWave@4x.tga" />
     <EmbeddedResource Include="Resources\Atlas\Metronome@2x.tga" />
     <EmbeddedResource Include="Resources\Atlas\MinusSmall@2x.tga" />

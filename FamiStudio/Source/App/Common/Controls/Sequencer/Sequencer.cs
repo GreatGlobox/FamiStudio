@@ -68,6 +68,7 @@ namespace FamiStudio
         int capturePatternIdx = -1;
         int dragSeekPosition = -1;
         int selectionDragAnchorPatternIdx = -1;
+        int lastChanIdx = -1;
         float zoom = DefaultZoom;
         float bitmapScale = 1.0f;
         float channelBitmapScale = 1.0f;
@@ -672,7 +673,7 @@ namespace FamiStudio
                 if (channelVisible[i])
                 {
                     // Dim unsupported channels if enabled in settings
-                    var dim = Settings.DimUnsupportedChannels && !Song.Channels[i].SupportsInstrument(selectedInstrument);
+                    var dim = Settings.DimUnsupportedChannels && !Song.Channels[i].SupportsInstrument(selectedInstrument, false);
 
                     // Icon
                     var isHoverRow = hoverRow == channelToRow[i];
@@ -1413,6 +1414,8 @@ namespace FamiStudio
             if (e.Left && IsMouseInTrackName(e.X, e.Y))
             { 
                 var chanIdx = GetChannelIndexFromIconPos(e.X, e.Y);
+                lastChanIdx = chanIdx;
+
                 if (chanIdx >= 0)
                 {
                     App.ToggleChannelActive(chanIdx);
@@ -1763,12 +1766,18 @@ namespace FamiStudio
 
         private bool HandleTouchClickChannelName(int x, int y, bool doubleClick = false)
         {
+            // HACK: Since the sequencer doesn't use real buttons, we keep the last tapped channel index.
+            // This prevents an issue on mobile, where tapping two icons that are close together sends
+            // a double tap, toggling solo channel. Note: Usually only doable with small channel Y size.
             if (IsMouseInTrackName(x, y))
             {
                 var chanIdx = GetChannelIndexFromIconPos(x, y);
+                var canToggleSolo = lastChanIdx == chanIdx;
+                lastChanIdx = chanIdx;
+
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick)
+                    if (doubleClick && canToggleSolo)
                     {
                         App.ToggleChannelSolo(chanIdx, true);
                     }
@@ -1782,7 +1791,7 @@ namespace FamiStudio
                 chanIdx = GetChannelIndexFromGhostIconPos(x, y);
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick) 
+                    if (doubleClick && canToggleSolo)
                     { 
                         App.ToggleChannelForceDisplayAll(chanIdx, true);
                     }
@@ -1926,7 +1935,7 @@ namespace FamiStudio
                 return;
 
             App.UndoRedoManager.BeginTransaction(TransactionScope.Song, Song.Id);
-
+            
             var patternCounts = new Dictionary<Pattern, int>(patternRefCounts); // Safety.
             var uniqueCount = 0;
 
@@ -2372,6 +2381,7 @@ namespace FamiStudio
                         if (pattern != null && (i + startPatternIndex) < song.Length && song.Project.IsChannelActive(pattern.ChannelType))
                         {
                             var channelIdx = Channel.ChannelTypeToIndex(pattern.ChannelType, song.Project.ExpansionAudioMask, song.Project.ExpansionNumN163Channels);
+                            pattern.RemoveUnsupportedChannelFeatures();
                             song.Channels[channelIdx].PatternInstances[i + startPatternIndex] = pattern;
                         }
                     }

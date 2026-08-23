@@ -23,6 +23,7 @@ nav:
   - "FamiStudio 4.2.0 Highlights": releases/420.md
   - "FamiStudio 4.3.0 Highlights": releases/430.md
   - "FamiStudio 4.4.0 Highlights": releases/440.md
+  - "FamiStudio 4.5.0 Highlights": releases/450.md
 extra_css:
     - css/extra.css    
 theme: 

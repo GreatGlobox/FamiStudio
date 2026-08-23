@@ -4,6 +4,64 @@ Version history / release notes for each release.
 
 To download older versions or view the release dates, please visit the [Github Releases](https://github.com/BleuBleu/FamiStudio/releases) page.
 
+## Version 4.5.3 (Hotfix)
+
+This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
+
+Changes/Fixes:
+
+* Fixed an issue where certain PAL VGM imports would be too slow
+* Fixed an issue regarding certain VGM import data being incorrect
+* Fixed crash when right clicking a note when no arppegio (None) was selected
+* Fixed some notes and envelopes in the Mega Man 2 demo song
+* Fixed NSF/ROM export issue introduced in 4.5.2
+
+## Version 4.5.2 (Hotfix)
+
+This release was also 100% handled by Steo, I'm just publishing it. Thanks!!
+
+Changes/Fixes:
+
+* Fixed export dialog issue where "Loop Count" and "Duration" options could both be disabled
+* Fixed issue where a leading whitespace in the project name would break ROM / NSF export
+* Fixed issue with FamiTracker exports where envelopes weren't truncated to max supported length
+* Fixed issue where sequencer didn't update when deleting a sample in "DPCM Sample" color mode
+* Fixed issue introduced in 4.5.0 regarding MIDI instruments no longer exporting as intended
+* Added option to replace arps in context menu
+* Fixed crash with broken MIDI files (unexpected end of file)
+* Fixed issue where pasting a pattern in the sequencer could lead to it containing an unsupported effect
+* Fixed issue with switching back to instrument arp after using an override
+
+## Version 4.5.1 (Hotfix)
+
+This release was 100% handled by Steo, I'm just publishing it. Thanks!!
+
+Changes/Fixes:
+
+* Fixed several VGM issues (incorporated some from Perkka too)
+* Current song is now selected by default in export dialog
+* Added VRC7 sustain bit (override release) in NSF
+* Added sub-menus for context menus and moved scale options to them
+* Added option for dim unsupported channels
+* Added option to make selected patterns unique (icons should follow in a major release)
+* Fixed issue with N163 loop / release points on import (bug introduced in 4.5.0)
+* Fixed FamiTracker N163 export issues (chunk length and truncate to 32)
+* Fixed some export dialog localisation errors
+
+## Version 4.5.0
+
+This release, like the previous one, was primarily handled by Steo. Many thanks for their continued effort. This will likely remain the case for the foreseeable future while I focus on other projects
+
+Changes/Fixes:
+
+* Added option to disable attack on DPCM, this will ignore initial DMC value
+* Added option to use DPCM sample colours in oscilloscope video export 
+* Added option to import initial DMC values for NSF
+* Added scales to the piano roll context menu, right-click / long press an empty area to access
+* Added double click/tap in project explorer to open their properties
+* Added saving project export settings for each mode
+* Added DMC initial values to text export
+
 ## Version 4.4.4 (Hotfix)
 
 Changes/Fixes:
