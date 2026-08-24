@@ -2664,43 +2664,19 @@ namespace FamiStudio
             return selectedNoteIndices.Contains(absoluteIdx - selectionMinX);
         }
 
-        private bool IsEffectSelectedByNotes(int absoluteIdx)
-        {
-            if (legacySelectMode || captureSelectionFromHeader || captureSelectionFromEffectPanel)
-            {
-                return false;
-            }
-
-            var channel = Song.Channels[editChannel];
-
-            foreach (var offset in selectedNoteIndices)
-            {
-                var noteAbsIdx = selectionMinX + offset;
-                var location = NoteLocation.FromAbsoluteNoteIndex(Song, noteAbsIdx);
-                var note = channel.GetNoteAt(location);
-
-                if (note == null || !note.IsMusical)
-                    continue;
-
-                var duration = GetVisualNoteDuration(location, note);
-
-                if (absoluteIdx >= noteAbsIdx && absoluteIdx < noteAbsIdx + duration)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private bool IsEffectFrameSelected(int absoluteIdx)
         {
             if (!IsSelectionValid())
                 return false;
 
-            if (legacySelectMode || captureSelectionFromHeader || captureSelectionFromEffectPanel)
+            if (legacySelectMode || captureSelectionFromHeader)
             {
                 return absoluteIdx >= selectionMinX && absoluteIdx <= selectionMaxX;
+            }
+
+            if (captureSelectionFromEffectPanel)
+            {
+                return absoluteIdx >= captureMarqueeMinX && absoluteIdx <= captureMarqueeMaxX;
             }
 
             return selectedEffectIndices.Contains(absoluteIdx);
@@ -5100,6 +5076,147 @@ namespace FamiStudio
         {
             return IsSelectionValid() && Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX) != Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX);
         }
+
+        private void UpdateSelectedNotesFromEffects()
+        {
+            selectedNoteIndices.Clear();
+
+            if (legacySelectMode || selectedEffectIndices.Count == 0)
+                return;
+
+            var selectedNotes = new HashSet<int>();
+
+            var effectMin = selectedEffectIndices.Min();
+            var effectMax = selectedEffectIndices.Max();
+
+            // We need to check if the effect is over any part of a note body.
+            TransformNotes(0, effectMax, false, false, false, (note, idx) =>
+            {
+                if (note == null || !note.IsMusical)
+                    return note;
+
+                var noteAbsoluteIdx = idx;
+                var duration = GetVisualNoteDuration(noteAbsoluteIdx, note);
+                var noteEnd = noteAbsoluteIdx + duration;
+
+                foreach (var effectAbsoluteIdx in selectedEffectIndices)
+                {
+                    if (effectAbsoluteIdx >= noteAbsoluteIdx &&
+                        effectAbsoluteIdx < noteEnd)
+                    {
+                        selectedNotes.Add(noteAbsoluteIdx);
+                        break;
+                    }
+                }
+
+                return note;
+            });
+
+            var newSelectionMin = effectMin;
+            var newSelectionMax = effectMax;
+
+            if (selectedNotes.Count > 0)
+            {
+                newSelectionMin = Math.Min(newSelectionMin, selectedNotes.Min());
+                newSelectionMax = Math.Max(newSelectionMax, selectedNotes.Max());
+            }
+
+            selectionMinX = newSelectionMin;
+            selectionMaxX = newSelectionMax;
+
+            foreach (var absoluteIdx in selectedNotes)
+                selectedNoteIndices.Add(absoluteIdx - selectionMinX);
+        }
+
+        private void ClearEffects(Channel channel, SortedList<int, int> effects)
+        {
+            foreach (var kv in effects)
+            {
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
+                channel.GetNoteAt(location)?.ClearEffectValue(selectedEffectIdx);
+            }
+        }
+
+        private void PlaceEffects(Channel channel, SortedList<int, int> effects, int amount)
+        {
+            foreach (var kv in effects)
+            {
+                var frame    = kv.Key + amount;
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, frame);
+                var pattern  = channel.PatternInstances[location.PatternIndex];
+
+                pattern ??= channel.CreatePatternAndInstance(location.PatternIndex);
+
+                var note = pattern.GetOrCreateNoteAt(location.NoteIndex);
+                note.SetEffectValue(selectedEffectIdx, kv.Value);
+            }
+        }
+
+        private void ClearNotes(Channel channel, SortedList<int, Note> notes)
+        {
+            foreach (var kv in notes)
+            {
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
+                var pattern = channel.PatternInstances[location.PatternIndex];
+                if (pattern == null)
+                    continue;
+
+                var note = channel.GetNoteAt(location);
+                if (note == null)
+                    continue;
+
+                note.Clear(false);
+
+                if (note.IsEmpty)
+                {
+                    pattern.DeleteNotesBetween(location.NoteIndex, location.NoteIndex + 1);
+                }
+            }
+        }
+
+        private void PlaceNotes(Channel channel, SortedList<int, Note> notes, int amount)
+        {
+            foreach (var kv in notes)
+            {
+                var frame    = kv.Key + amount;
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, frame);
+                var pattern  = channel.PatternInstances[location.PatternIndex];
+
+                pattern ??= channel.CreatePatternAndInstance(location.PatternIndex);
+                pattern.SetNoteAt(location.NoteIndex, kv.Value.Clone());
+            }
+        }
+
+        private void UpdateSelectionAfterMove(int amount, int songEnd, int[] movedSelectedNotes, int[] movedSelectedEffects)
+        {
+            selectionMinX = Utils.Clamp(selectionMinX + amount, 0, songEnd - 1);
+            selectionMaxX = Utils.Clamp(selectionMaxX + amount, 0, songEnd - 1);
+
+            selectedNoteIndices.Clear();
+
+            foreach (var absoluteIdx in movedSelectedNotes)
+                selectedNoteIndices.Add(absoluteIdx - selectionMinX);
+
+            selectedEffectIndices.Clear();
+
+            foreach (var absoluteIdx in movedSelectedEffects)
+                selectedEffectIndices.Add(absoluteIdx);
+        }
+
+        private void NotifyMovedPatterns(Channel channel, int oldMin, int oldMax, int newMin, int newMax)
+        {
+            var patternMin = Math.Min(oldMin, newMin);
+            var patternMax = Math.Max(oldMax, newMax);
+
+            channel.InvalidateCumulativePatternCache(patternMin, patternMax);
+
+            for (int i = patternMin; i <= patternMax; i++)
+            {
+                var pattern = channel.PatternInstances[i];
+                if (pattern != null)
+                    PatternChanged?.Invoke(pattern);
+            }
+        }
         
         private void MoveNotes(int amount)
         {
@@ -5123,6 +5240,7 @@ namespace FamiStudio
                 return;
             }
 
+            // No need to process anything if no notes are selected.
             if (selectedNoteIndices.Count == 0)
                 return;
 
@@ -5132,6 +5250,7 @@ namespace FamiStudio
 
             amount = Utils.Clamp(amount, -selectedMin, songEnd - 1 - selectedMax);
 
+            // Exit if we haven't moved anything.
             if (amount == 0)
                 return;
 
@@ -5151,16 +5270,22 @@ namespace FamiStudio
                 if (note != null && !note.IsEmpty && selectedNoteIndices.Contains(idx))
                 {
                     var absoluteIdx = selectionMinX + idx;
+                    var clone = note.Clone();
 
-                    newNotes[absoluteIdx] = note.Clone();
-
-                    if (note.IsMusical)
+                    if (clone.IsMusical)
                     {
                         var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
-                        var duration = GetVisualNoteDuration(location, note);
+                        var visualDuration = GetVisualNoteDuration(location, note);
 
-                        effectSelectionMax = Math.Max(effectSelectionMax, absoluteIdx + duration - 1);
+                        clone.Duration = (ushort)Math.Max(1, visualDuration);
+
+                        if (clone.HasRelease && clone.Release >= clone.Duration)
+                            clone.Release = Math.Max(0, clone.Duration - 1);
+
+                        effectSelectionMax = Math.Max(effectSelectionMax, absoluteIdx + visualDuration - 1);
                     }
+
+                    newNotes[absoluteIdx] = clone;
                 }
 
                 return note;
@@ -5177,7 +5302,7 @@ namespace FamiStudio
                 {
                     var absoluteIdx = it.Location.ToAbsoluteNoteIndex(Song);
 
-                    if (IsEffectSelectedByNotes(absoluteIdx) && it.Note.HasValidEffectValue(selectedEffectIdx))
+                    if (selectedEffectIndices.Contains(absoluteIdx) && it.Note.HasValidEffectValue(selectedEffectIdx))
                     {
                         selectedEffects[absoluteIdx] = it.Note.GetEffectValue(selectedEffectIdx);
                     }
@@ -5189,65 +5314,13 @@ namespace FamiStudio
             var newMin = Song.PatternIndexFromAbsoluteNoteIndex(selectedMin + amount);
             var newMax = Song.PatternIndexFromAbsoluteNoteIndex(selectedMax + amount);
 
-            foreach (var kv in selectedEffects)
-            {
-                var location = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
-                channel.GetNoteAt(location)?.ClearEffectValue(selectedEffectIdx);
-            }
-
-            foreach (var kv in newNotes)
-            {
-                var location = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
-                channel.GetNoteAt(location)?.Clear(false);
-            }
-
-            foreach (var kv in newNotes)
-            {
-                var frame = kv.Key + amount;
-                var location = NoteLocation.FromAbsoluteNoteIndex(Song, frame);
-                var pattern = channel.PatternInstances[location.PatternIndex];
-
-                pattern ??= channel.CreatePatternAndInstance(location.PatternIndex);
-                pattern.SetNoteAt(location.NoteIndex, kv.Value.Clone());
-            }
-
-            foreach (var kv in selectedEffects)
-            {
-                var frame    = kv.Key + amount;
-                var location = NoteLocation.FromAbsoluteNoteIndex(Song, frame);
-                var pattern  = channel.PatternInstances[location.PatternIndex];
-
-                pattern ??= channel.CreatePatternAndInstance(location.PatternIndex);
-
-                var note = pattern.GetOrCreateNoteAt(location.NoteIndex);
-
-                note.SetEffectValue(selectedEffectIdx, kv.Value);
-            }
-
-            selectionMinX = Utils.Clamp(selectionMinX + amount, 0, songEnd - 1);
-            selectionMaxX = Utils.Clamp(selectionMaxX + amount, 0, songEnd - 1);
-
-            selectedNoteIndices.Clear();
-
-            foreach (var absoluteIdx in movedSelectedNotes)
-                selectedNoteIndices.Add(absoluteIdx - selectionMinX);
-
-            selectedEffectIndices.Clear();
-
-            foreach (var absoluteIdx in movedSelectedEffects)
-                selectedEffectIndices.Add(absoluteIdx);
-
-            var patternMin = Math.Min(oldMin, newMin);
-            var patternMax = Math.Max(oldMax, newMax);
-
-            channel.InvalidateCumulativePatternCache(patternMin, patternMax);
-
-            for (int i = patternMin; i <= patternMax; i++)
-            {
-                var pattern = channel.PatternInstances[i];
-                if (pattern != null)
-                    PatternChanged?.Invoke(pattern);
-            }
+            // We have to clear all the effects and notes and place them again in order to move them.
+            ClearEffects(channel, selectedEffects);
+            ClearNotes(channel, newNotes);
+            PlaceNotes(channel, newNotes, amount);
+            PlaceEffects(channel, selectedEffects, amount);
+            UpdateSelectionAfterMove(amount, songEnd, movedSelectedNotes, movedSelectedEffects);
+            NotifyMovedPatterns(channel, oldMin, oldMax, newMin, newMax);
 
             App.UndoRedoManager.EndTransaction();
 
@@ -8192,7 +8265,7 @@ namespace FamiStudio
             var marqueeMinX = SnapNote(minSelectionIdx);
             var marqueeMaxX = SnapNote(maxSelectionIdx, true) + pad;
 
-            // Legacy/non-channel keeps using the old selection rectangle directly.
+            // Legacy or non-channel selections retain the X only selection rectangle.
             if (editMode != EditionMode.Channel || legacySelectMode)
             {
                 SetSelection(marqueeMinX, marqueeMaxX);
@@ -8200,20 +8273,38 @@ namespace FamiStudio
                 return;
             }
 
-            // Modern mode keeps the current drag rectangle separate from the
-            // accumulated/persistent selection bounds.
+            // Modern selection needs to separate selection rectangle from selected notes.
+            // This is necessary for using CTRL to select / deselect.
             captureMarqueeMinX = marqueeMinX;
             captureMarqueeMaxX = marqueeMaxX;
 
             if (captureSelectionFromEffectPanel)
             {
-                // Effect-panel selections remain X-only.
                 selectionMinX = marqueeMinX;
                 selectionMaxX = marqueeMaxX;
                 selectionMinY = -1;
                 selectionMaxY = -1;
 
                 selectedNoteIndices.Clear();
+                selectedEffectIndices.Clear();
+
+                // Build selected frames based on selection.
+                var channel = Song.Channels[editChannel];
+                var minLocation = NoteLocation.FromAbsoluteNoteIndex(Song, marqueeMinX);
+                var maxLocation = NoteLocation.FromAbsoluteNoteIndex(Song, marqueeMaxX);
+
+                if (selectedEffectIdx >= 0)
+                {
+                    for (var it = channel.GetSparseNoteIterator(minLocation, maxLocation, Note.GetFilterForEffect(selectedEffectIdx)); !it.Done; it.Next())
+                    {
+                        if (it.Note.HasValidEffectValue(selectedEffectIdx))
+                        {
+                            selectedEffectIndices.Add(it.Location.ToAbsoluteNoteIndex(Song));
+                        }
+                    }
+                }
+
+                UpdateSelectedNotesFromEffects();
 
                 MarkDirty();
                 return;
@@ -8223,58 +8314,45 @@ namespace FamiStudio
 
             if (captureSelectionFromHeader)
             {
-                // Header selection is full-column/X-only.
-                TransformNotes(
-                    marqueeMinX,
-                    marqueeMaxX,
-                    false,
-                    false,
-                    false,
-                    (note, idx) =>
-                    {
-                        if (note != null && !note.IsEmpty)
-                            notesInMarquee.Add(marqueeMinX + idx);
+                TransformNotes(marqueeMinX, marqueeMaxX, false, false, false, (note, idx) =>
+                {
+                    if (note != null && !note.IsEmpty)
+                        notesInMarquee.Add(marqueeMinX + idx);
 
-                        return note;
-                    });
+                    return note;
+                });
             }
             else
             {
-                // Regular 2D note-area marquee.
-                int noteValue = NumNotes - Utils.Clamp(
-                    (y + scrollY - headerAndEffectSizeY) / noteSizeY,
-                    0,
-                    NumNotes);
-
+                // Selection is 2D in note area.
+                int noteValue   = NumNotes - Utils.Clamp((y + scrollY - headerAndEffectSizeY) / noteSizeY, 0, NumNotes);
                 var marqueeMinY = Math.Min(noteValue, captureNoteValue);
                 var marqueeMaxY = Math.Max(noteValue, captureNoteValue);
 
                 captureMarqueeMinY = marqueeMinY;
                 captureMarqueeMaxY = marqueeMaxY;
 
-                TransformNotes(
-                    marqueeMinX,
-                    marqueeMaxX,
-                    false,
-                    false,
-                    false,
-                    (note, idx) =>
+                TransformNotes(0, marqueeMaxX, false, false, false, (note, idx) =>
+                {
+                    if (note != null && note.IsMusical && note.Value >= marqueeMinY && note.Value <= marqueeMaxY)
                     {
-                        if (note != null &&
-                            note.IsMusical &&
-                            note.Value >= marqueeMinY &&
-                            note.Value <= marqueeMaxY)
-                        {
-                            notesInMarquee.Add(marqueeMinX + idx);
-                        }
+                        var noteAbsoluteIdx = idx;
+                        var duration = GetVisualNoteDuration(noteAbsoluteIdx, note);
+                        var noteEnd = noteAbsoluteIdx + duration - 1;
 
-                        return note;
-                    });
+                        // Select the note if any part of it is within the selection bounds.
+                        if (noteAbsoluteIdx <= marqueeMaxX && noteEnd >= marqueeMinX)
+                        {
+                            notesInMarquee.Add(noteAbsoluteIdx);
+                        }
+                    }
+
+                    return note;
+                });
             }
 
             if (ModifierKeys.IsControlDown)
             {
-                // Toggle only against the selection state from mouse-down.
                 var result = new HashSet<int>(captureSelectedNoteIndices);
 
                 foreach (var absoluteIdx in notesInMarquee)
@@ -8293,8 +8371,6 @@ namespace FamiStudio
                     foreach (var absoluteIdx in result)
                         selectedNoteIndices.Add(absoluteIdx - selectionMinX);
 
-                    // Keep persistent Y bounds representative of the resulting
-                    // selected notes rather than the current Ctrl marquee.
                     var channel = Song.Channels[editChannel];
 
                     selectionMinY = Note.MusicalNoteMax;
@@ -8302,10 +8378,8 @@ namespace FamiStudio
 
                     foreach (var absoluteIdx in result)
                     {
-                        var location =
-                            NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
-
-                        var note = channel.GetNoteAt(location);
+                        var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
+                        var note     = channel.GetNoteAt(location);
 
                         if (note != null && note.IsMusical)
                         {
@@ -8316,7 +8390,7 @@ namespace FamiStudio
                 }
                 else
                 {
-                    // Nothing remains selected.
+                    // Selection rectangle will always be cleared when done.
                     selectionMinX = marqueeMinX;
                     selectionMaxX = marqueeMaxX;
                     selectionMinY = captureMarqueeMinY;
@@ -8325,9 +8399,15 @@ namespace FamiStudio
             }
             else
             {
-                // Normal modern selection replaces the previous note membership.
+                // Select notes based on bounds of rectangle.
                 selectionMinX = marqueeMinX;
                 selectionMaxX = marqueeMaxX;
+
+                if (notesInMarquee.Count > 0)
+                {
+                    selectionMinX = Math.Min(selectionMinX, notesInMarquee.Min());
+                    selectionMaxX = Math.Max(selectionMaxX, notesInMarquee.Max());
+                }
 
                 if (!captureSelectionFromHeader)
                 {
@@ -9632,33 +9712,34 @@ namespace FamiStudio
                 }
 
                 var copy = ModifierKeys.IsControlDown;
-                var keepFx = captureOperation != CaptureOperation.DragSelection;
-
-                // If not copying, we need to move any selected effects.
-                if (!copy && captureOperation == CaptureOperation.DragSelection && !legacySelectMode)
-                {
-                    foreach (var kv in dragEffects)
-                    {
-                        var oldLocation = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
-                        var pattern = channel.PatternInstances[oldLocation.PatternIndex];
-
-                        if (pattern == null)
-                            continue;
-
-                        var oldNote = channel.GetNoteAt(oldLocation);
-                        if (oldNote == null)
-                            continue;
-
-                        oldNote.ClearEffectValue(selectedEffectIdx);
-
-                        if (oldNote.IsEmpty)
-                            pattern.DeleteNotesBetween(oldLocation.NoteIndex, oldLocation.NoteIndex + 1);
-                    }
-                }
+                var modernDrag = captureOperation == CaptureOperation.DragSelection && !legacySelectMode;
+                var keepFx     = captureOperation != CaptureOperation.DragSelection || modernDrag;
 
                 // If not copying, delete original notes.
                 if (!copy)
                 {
+                    // For modern selection mode, we need to move any selected effects.
+                    if (modernDrag)
+                    {
+                        foreach (var kv in dragEffects)
+                        {
+                            var oldLocation = NoteLocation.FromAbsoluteNoteIndex(Song, kv.Key);
+                            var pattern = channel.PatternInstances[oldLocation.PatternIndex];
+
+                            if (pattern == null)
+                                continue;
+
+                            var oldNote = channel.GetNoteAt(oldLocation);
+                            if (oldNote == null)
+                                continue;
+
+                            oldNote.ClearEffectValue(selectedEffectIdx);
+
+                            if (oldNote.IsEmpty)
+                                pattern.DeleteNotesBetween(oldLocation.NoteIndex, oldLocation.NoteIndex + 1);
+                        }
+                    }
+
                     foreach (var kv in dragNotes)
                     {
                         channel.DeleteNotesBetween(kv.Key, kv.Key + 1, keepFx);
