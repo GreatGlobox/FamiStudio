@@ -1262,6 +1262,7 @@ namespace FamiStudio
 
         public void OpenConfigDialog()
         {
+            var prevSelect = Settings.UseLegacySelectionMode;
             var dlg = new ConfigDialog(window);
 
             dlg.ShowDialogAsync((r) =>
@@ -1271,6 +1272,10 @@ namespace FamiStudio
                     // Yes = audio settings changed.
                     if (r == DialogResult.Yes)
                         RecreateAudioPlayers(true);
+
+                    // Apply settings to piano roll if selection mode has changed.
+                    if (prevSelect != Settings.UseLegacySelectionMode)
+                        ApplySettings();
 
                     RefreshLayout();
                     RefreshProjectExplorerButtons();
