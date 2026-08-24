@@ -372,6 +372,10 @@ namespace FamiStudio
         HashSet<int> captureSelectedNoteIndices = new HashSet<int>();
         HashSet<int> selectedEffectIndices = new HashSet<int>();
 
+        // Envelope selections.
+        HashSet<int> selectedEnvelopeIndices = new HashSet<int>();
+        HashSet<int> captureSelectedEnvelopeIndices = new HashSet<int>();
+
         // Pattern edit mode.
         int editChannel = -1;
 
@@ -2674,7 +2678,7 @@ namespace FamiStudio
                 return absoluteIdx >= selectionMinX && absoluteIdx <= selectionMaxX;
             }
 
-            if (captureSelectionFromEffectPanel)
+            if (captureOperation == CaptureOperation.Select && captureSelectionFromEffectPanel)
             {
                 return absoluteIdx >= captureMarqueeMinX && absoluteIdx <= captureMarqueeMaxX;
             }
@@ -2684,7 +2688,13 @@ namespace FamiStudio
 
         private bool IsEnvelopeValueSelected(int idx)
         {
-            return IsSelectionValid() && idx >= selectionMinX && idx <= selectionMaxX;
+            if (!IsSelectionValid())
+                return false;
+
+            if (legacySelectMode)
+                return idx >= selectionMinX && idx <= selectionMaxX;
+
+            return selectedEnvelopeIndices.Contains(idx);
         }
 
         private bool GetRepeatEnvelopeSelectionMinMax(out int min, out int max)
@@ -2728,9 +2738,19 @@ namespace FamiStudio
             var drawMinY = selectionMinY;
             var drawMaxY = selectionMaxY;
 
-            if (!legacySelectMode)
+            if (!legacySelectMode && (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio))
             {
-                // Selection rectangles are only temporary while dragging, unless using legacy mode.
+                c.FillRectangle(
+                    GetPixelXForAbsoluteNoteIndex(captureMarqueeMinX) + 1,  0,
+                    GetPixelXForAbsoluteNoteIndex(captureMarqueeMaxX  + 1), height,
+                    color);
+
+                return;
+            }
+
+            if (editMode == EditionMode.Channel && !legacySelectMode)
+            {
+                // Modern channel selection rectangles are temporary while dragging.
                 if (captureOperation == CaptureOperation.Select)
                 {
                     drawMinX = captureMarqueeMinX;
@@ -3374,6 +3394,9 @@ namespace FamiStudio
                     var highlighted = Platform.IsMobile && highlightNoteAbsIndex == i;
 
                     r.c.FillRectangle(x0, y0, x1, y1, brush);
+
+                    if (selected && !legacySelectMode)
+                        r.c.FillRectangle(x0, y0, x1, y1, selectionBgVisibleColor);
 
                     if (!highlighted)
                         r.c.DrawRectangle(x0, y0, x1, y1, selected ? Theme.LightGreyColor1 : Theme.BlackColor, selected ? 3 : 1, selected, selected);
@@ -5448,8 +5471,47 @@ namespace FamiStudio
 
         private void MoveEnvelopeValues(int amount)
         {
-            if (selectionMinX + amount >= 0)
-                ReplaceEnvelopeValues(GetSelectedEnvelopeValues(), selectionMinX + amount);
+            if (legacySelectMode)
+            {
+                if (selectionMinX + amount >= 0)
+                    ReplaceEnvelopeValues(GetSelectedEnvelopeValues(), selectionMinX + amount);
+
+                return;
+            }
+
+            if (selectedEnvelopeIndices.Count == 0)
+                return;
+
+            var min = selectedEnvelopeIndices.Min();
+            var max = selectedEnvelopeIndices.Max();
+
+            amount = Utils.Clamp(amount, -min, EditEnvelope.Length - 1 - max);
+
+            if (amount == 0)
+                return;
+
+            // We need to store selected values, remove the old positions,
+            // write to the new positions, then move the selection itself.
+            var values = new SortedList<int, sbyte>();
+
+            foreach (var idx in selectedEnvelopeIndices)
+                values[idx] = EditEnvelope.Values[idx];
+
+            foreach (var idx in selectedEnvelopeIndices)
+                EditEnvelope.Values[idx] = 0;
+
+            foreach (var kv in values)
+                EditEnvelope.Values[kv.Key + amount] = kv.Value;
+
+            selectedEnvelopeIndices.Clear();
+
+            foreach (var idx in values.Keys)
+                selectedEnvelopeIndices.Add(idx + amount);
+
+            selectionMinX = selectedEnvelopeIndices.Min();
+            selectionMaxX = selectedEnvelopeIndices.Max();
+
+            MarkDirty();
         }
 
         private void DeleteSelectedNotes(bool doTransaction = true, bool deleteNotes = true, int deleteEffectsMask = Note.EffectAllMask)
@@ -6914,6 +6976,9 @@ namespace FamiStudio
 
                 for (int i = selectionMinX; i <= selectionMaxX; i++)
                 {
+                    if (!legacySelectMode && !IsEnvelopeValueSelected(i))
+                        continue;
+
                     if (relativeEffectScaling)
                         env.Values[i] = (sbyte)Utils.Clamp((int)Math.Round(env.Values[i] * scaling), min, max);
                     else
@@ -8120,6 +8185,10 @@ namespace FamiStudio
             selectionMaxY = -1;
 
             selectedNoteIndices.Clear();
+            selectedEffectIndices.Clear();
+
+            selectedEnvelopeIndices.Clear();
+            captureSelectedEnvelopeIndices.Clear();
         }
 
         private void SetMobileHighlightedNote(int absNoteIndex)
@@ -8246,6 +8315,14 @@ namespace FamiStudio
                     captureSelectedNoteIndices.Add(selectionMinX + idx);
             }
 
+            captureSelectedEnvelopeIndices.Clear();
+
+            if (!legacySelectMode && ModifierKeys.IsControlDown && (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio))
+            {
+                foreach (var idx in selectedEnvelopeIndices)
+                    captureSelectedEnvelopeIndices.Add(idx);
+            }
+
             StartCaptureOperation(x, y, CaptureOperation.Select, false);
 
             if (captureThresholdMet)
@@ -8265,18 +8342,63 @@ namespace FamiStudio
             var marqueeMinX = SnapNote(minSelectionIdx);
             var marqueeMaxX = SnapNote(maxSelectionIdx, true) + pad;
 
-            // Legacy or non-channel selections retain the X only selection rectangle.
-            if (editMode != EditionMode.Channel || legacySelectMode)
+            if (legacySelectMode)
             {
                 SetSelection(marqueeMinX, marqueeMaxX);
                 MarkDirty();
                 return;
             }
 
-            // Modern selection needs to separate selection rectangle from selected notes.
-            // This is necessary for using CTRL to select / deselect.
             captureMarqueeMinX = marqueeMinX;
             captureMarqueeMaxX = marqueeMaxX;
+            
+            // Envelope and arpeggio selection supports using CTRL for separate selections.
+            if (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio)
+            {
+                var result = ModifierKeys.IsControlDown ? new HashSet<int>(captureSelectedEnvelopeIndices) : new HashSet<int>();
+
+                var min = Math.Max(marqueeMinX, 0);
+                var max = Math.Min(marqueeMaxX, EditEnvelope.Length - 1);
+
+                for (var i = min; i <= max; i++)
+                {
+                    if (ModifierKeys.IsControlDown)
+                    {
+                        if (!result.Add(i))
+                            result.Remove(i);
+                    }
+                    else
+                    {
+                        result.Add(i);
+                    }
+                }
+
+                selectedEnvelopeIndices.Clear();
+
+                foreach (var idx in result)
+                    selectedEnvelopeIndices.Add(idx);
+
+                if (result.Count > 0)
+                {
+                    selectionMinX = result.Min();
+                    selectionMaxX = result.Max();
+                }
+                else
+                {
+                    selectionMinX = marqueeMinX;
+                    selectionMaxX = marqueeMaxX;
+                }
+
+                MarkDirty();
+                return;
+            }
+
+            if (editMode != EditionMode.Channel)
+            {
+                SetSelection(marqueeMinX, marqueeMaxX);
+                MarkDirty();
+                return;
+            }
 
             if (captureSelectionFromEffectPanel)
             {
@@ -8324,7 +8446,7 @@ namespace FamiStudio
             }
             else
             {
-                // Selection is 2D in note area.
+                // Note area itself. This is where we are using 2 dimensional selection.
                 int noteValue   = NumNotes - Utils.Clamp((y + scrollY - headerAndEffectSizeY) / noteSizeY, 0, NumNotes);
                 var marqueeMinY = Math.Min(noteValue, captureNoteValue);
                 var marqueeMaxY = Math.Max(noteValue, captureNoteValue);
@@ -8340,7 +8462,7 @@ namespace FamiStudio
                         var duration = GetVisualNoteDuration(noteAbsoluteIdx, note);
                         var noteEnd = noteAbsoluteIdx + duration - 1;
 
-                        // Select the note if any part of it is within the selection bounds.
+                        // Add note to selection if any part of it is within the rectangle bounds.
                         if (noteAbsoluteIdx <= marqueeMaxX && noteEnd >= marqueeMinX)
                         {
                             notesInMarquee.Add(noteAbsoluteIdx);
@@ -8390,7 +8512,6 @@ namespace FamiStudio
                 }
                 else
                 {
-                    // Selection rectangle will always be cleared when done.
                     selectionMinX = marqueeMinX;
                     selectionMaxX = marqueeMaxX;
                     selectionMinY = captureMarqueeMinY;
@@ -8399,7 +8520,6 @@ namespace FamiStudio
             }
             else
             {
-                // Select notes based on bounds of rectangle.
                 selectionMinX = marqueeMinX;
                 selectionMaxX = marqueeMaxX;
 
