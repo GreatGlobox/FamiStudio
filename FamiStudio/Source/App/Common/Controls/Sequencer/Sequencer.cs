@@ -1994,6 +1994,28 @@ namespace FamiStudio
             return false;
         }
 
+        private void HandleTouchLongPressRelease(PointerEventArgs e)
+        {
+            var x = e.X;
+            var y = e.Y;
+
+            // Header:
+            // - Context menu : seet loop point, custom settings
+            // Pattern names:
+            // - Context menu : Mute/Unmute, Toggle force display, etc. (click on icon???)
+            // Pattern area:
+            // - Context menu : Pattern properties, etc. (if in selection)
+
+            if (HandleTouchLongPressChannelName(x, y)) goto Handled;
+            if (HandleTouchLongPressHeader(x, y)) goto Handled;
+            if (HandleTouchLongPressPatternArea(x, y)) goto Handled;
+
+            return;
+
+        Handled:
+            MarkDirty();
+        }
+
         private bool HandleTouchLongPressHeader(int x, int y)
         {
             return HandleContextMenuHeader(x, y);
@@ -2172,10 +2194,6 @@ namespace FamiStudio
                 {
                     menu.Add(new ContextMenuOption("MenuPiano", GoToPianoRollLabel, () => { GotoPianoRoll(location); }));
                 }
-                else if (pattern != null &&!IsPatternSelected(location))
-                {
-                    SetSelection(location, location);
-                }
 
                 if (IsSelectionValid() && !IsPatternSelected(location))
                 {
@@ -2261,12 +2279,11 @@ namespace FamiStudio
             var x = e.X;
             var y = e.Y;
 
-            // In the modern select mode, we use long press release for the context menu here.
+            // In the modern select mode, we use release after a long press for the context menu here.
             var context = !legacySelectMode && e.IsLongPress && captureOperation == CaptureOperation.SelectRectangle && !captureThresholdMet;
             if (context)
             {
-                Platform.VibrateClick();
-                OnTouchLongPressRelease(e);
+                HandleTouchLongPressRelease(e);
             }
 
             EndCaptureOperation(x, y);
@@ -2371,11 +2388,10 @@ namespace FamiStudio
 
             AbortCaptureOperation();
 
-            // Send a touch release to trigger the context menu if using legacy. This
-            // is because in modern select mode, we trigger the menu on release instead.
+            // Trigger the context menu if using legacy selection. Otherwise, start a selection.
             if (legacySelectMode)
             {
-                OnTouchLongPressRelease(e);
+                HandleTouchLongPressRelease(e);
             }
             else if (IsPointInPatternArea(x, y))
             {
@@ -2384,28 +2400,6 @@ namespace FamiStudio
                 captureThresholdMet = false;
             }
 
-            MarkDirty();
-        }
-
-        protected void OnTouchLongPressRelease(PointerEventArgs e)
-        {
-            var x = e.X;
-            var y = e.Y;
-
-            // Header:
-            // - Context menu : seet loop point, custom settings
-            // Pattern names:
-            // - Context menu : Mute/Unmute, Toggle force display, etc. (click on icon???)
-            // Pattern area:
-            // - Context menu : Pattern properties, etc. (if in selection)
-
-            if (HandleTouchLongPressChannelName(x, y)) goto Handled;
-            if (HandleTouchLongPressHeader(x, y)) goto Handled;
-            if (HandleTouchLongPressPatternArea(x, y)) goto Handled;
-
-            return;
-
-        Handled:
             MarkDirty();
         }
 

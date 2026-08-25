@@ -7461,13 +7461,16 @@ namespace FamiStudio
                         menu.Add(new ContextMenuOption("MenuClearSelection", ClearSelectionContext, () => { ClearSelection(); ClearHighlightedNote(); }));
                     }
 
-                    menu.Add(new ContextMenuOption("MenuSelectNote", SelectNoteRangeContext, () => { SelectSingleNote(noteLocation, mouseLocation, note); }));
+                    // This only really serves a purpose in legacy select mode.
+                    if (legacySelectMode)
+                        menu.Add(new ContextMenuOption("MenuSelectNote", SelectNoteRangeContext, () => { SelectSingleNote(noteLocation, mouseLocation, note); }));
                 }
                 else
                 {
                     note = channel.FindMusicalNoteAtLocation(ref noteLocation, -1);
 
-                    if (note != null)
+                    // This only really serves a purpose in legacy select mode.
+                    if (legacySelectMode && note != null)
                         opt.Add(new ContextMenuOption("MenuSelectNote", SelectNoteRangeContext, () => { SelectSingleNote(noteLocation, mouseLocation, note); }, ContextMenuSeparator.Before));
 
                     if (HasSelectedNotes())
@@ -7822,6 +7825,41 @@ namespace FamiStudio
             return HandleContextMenuDPCMMapping(x, y);
         }
 
+        private void HandleTouchLongPressRelease(PointerEventArgs e)
+        {
+            var x = e.X;
+            var y = e.Y;
+
+            if (editMode == EditionMode.Channel)
+            {
+                if (HandleTouchLongPressChannelNote(x, y)) goto Handled;
+                if (HandleTouchLongPressEffectPanel(x, y)) goto Handled;
+                if (HandleTouchLongPressChannelHeader(x, y)) goto Handled;
+            }
+
+            if (editMode == EditionMode.Envelope ||
+                editMode == EditionMode.Arpeggio)
+            {
+                if (HandleTouchLongPressDrawEnvelope(x, y)) goto Handled;
+                if (HandleTouchLongPressEnvelopeHeader(x, y)) goto Handled;
+            }
+
+            if (editMode == EditionMode.DPCM)
+            {
+                if (HandleTouchLongPressWave(x, y)) goto Handled;
+            }
+
+            if (editMode == EditionMode.DPCMMapping)
+            {
+                if (HandleTouchLongPressDPCMMapping(x, y)) goto Handled;
+            }
+
+            return;
+
+            Handled:
+                MarkDirty();
+        }
+
         protected void OnTouchDown(PointerEventArgs e)
         {
             var x = e.X;
@@ -7903,8 +7941,7 @@ namespace FamiStudio
             var context = !legacySelectMode && e.IsLongPress && captureOperation == CaptureOperation.Select && !captureThresholdMet;
             if (context)
             {
-                Platform.VibrateClick();
-                OnTouchLongPressRelease(e);
+                HandleTouchLongPressRelease(e);
             }
 
             EndCaptureOperation(x, y);
@@ -8052,57 +8089,24 @@ namespace FamiStudio
                 return;
             }
 
-            // Send touch release if we are using legacy mode or selecting a note. Otherwise start selection.
-            var isNote = GetNoteForCoord(x, y, out _, out _, out _) != null;
-            if (legacySelectMode || editMode != EditionMode.Channel || isNote)
-            {
-                OnTouchLongPressRelease(e);
-            }
-            else if (editMode == EditionMode.Channel && IsPointInNoteArea(x, y))
+            // Trigger context menu if using legacy selection mode or selecting a note. Otherwise, start a selection.
+            var validNoteArea = editMode == EditionMode.Channel && IsPointInNoteArea(x, y);
+            var note = validNoteArea ? GetNoteForCoord(x, y, out _, out _, out _) : null;
+
+            if (!legacySelectMode && validNoteArea && note == null)
             {
                 Platform.VibrateClick();
                 StartSelection(x, y);
             }
-
+            else
+            {
+                HandleTouchLongPressRelease(e);
+            }
+            
             return;
 
         Handled:
             MarkDirty();
-        }
-
-        protected void OnTouchLongPressRelease(PointerEventArgs e)
-        {
-            var x = e.X;
-            var y = e.Y;
-
-            if (editMode == EditionMode.Channel)
-            {
-                if (HandleTouchLongPressChannelNote(x, y)) goto Handled;
-                if (HandleTouchLongPressEffectPanel(x, y)) goto Handled;
-                if (HandleTouchLongPressChannelHeader(x, y)) goto Handled;
-            }
-
-            if (editMode == EditionMode.Envelope ||
-                editMode == EditionMode.Arpeggio)
-            {
-                if (HandleTouchLongPressDrawEnvelope(x, y)) goto Handled;
-                if (HandleTouchLongPressEnvelopeHeader(x, y)) goto Handled;
-            }
-
-            if (editMode == EditionMode.DPCM)
-            {
-                if (HandleTouchLongPressWave(x, y)) goto Handled;
-            }
-
-            if (editMode == EditionMode.DPCMMapping)
-            {
-                if (HandleTouchLongPressDPCMMapping(x, y)) goto Handled;
-            }
-
-            return;
-
-            Handled:
-                MarkDirty();
         }
 
         public void LayoutChanged()
@@ -10222,13 +10226,17 @@ namespace FamiStudio
 
             TransformNotes(min, max, false, final, false, (note, idx) =>
             {
-                if (note != null && note.IsMusical && !processedNotes.Contains(note))
+                var selected = !selection || legacySelectMode || selectedNoteIndices.Contains(idx);
+                if (selected && note != null)
                 {
-                    // HACK : Try to preserve releases.
-                    var hadRelease = note.HasRelease;
-                    note.Duration = (ushort)Math.Max(1, note.Duration + deltaNoteIdx);
-                    if (hadRelease && !note.HasRelease && note.Duration > 1)
-                        note.Release = note.Duration - 1;
+                    if (note.IsMusical && !processedNotes.Contains(note))
+                    {
+                        // HACK : Try to preserve releases.
+                        var hadRelease = note.HasRelease;
+                        note.Duration = (ushort)Math.Max(1, note.Duration + deltaNoteIdx);
+                        if (hadRelease && !note.HasRelease && note.Duration > 1)
+                            note.Release = note.Duration - 1;
+                    }
                 }
 
                 processedNotes.Add(note);
