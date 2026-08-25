@@ -306,7 +306,7 @@ namespace FamiStudio
                     page.SetPropertyVisible(5, Platform.IsDesktop);
                     page.SetPropertyVisible(6, Platform.IsDesktop);
                     page.SetPropertyVisible(8, Platform.IsDesktop);
-                    page.SetPropertyVisible(12, Platform.IsDesktop);
+                    page.SetPropertyVisible(13, Platform.IsDesktop);
                     break;
                 }
                 case ConfigSection.Input:

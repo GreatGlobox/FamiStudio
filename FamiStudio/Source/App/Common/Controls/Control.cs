@@ -590,6 +590,7 @@ namespace FamiStudio
         private bool handled; // Only use for mousewheel right now. Not fully implemented.
         private bool touch;
         private bool doubleTapLongPress;
+        private bool longPress;
 
         private float touchScale;
         private float flingVelX;
@@ -607,6 +608,7 @@ namespace FamiStudio
         public float FlingVelocityX => flingVelX;
         public float FlingVelocityY => flingVelY;
         public float TouchScale => touchScale;
+        public bool IsLongPress { get => longPress; init => longPress = value; }
         public bool IsDoubleTapLongPress { get => doubleTapLongPress; init => doubleTapLongPress = value; }
         public bool IsTouchEvent => touch;
         public bool IsRightClickDelayed => delay;

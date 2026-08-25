@@ -60,6 +60,7 @@ namespace FamiStudio
         private long doubleTapStartTime;
         private Point doubleTapLocation;
         private Control doubleTapControl;
+        private Control longPressControl;
         private bool doubleTapReceived;
         private bool doubleTapCanSendLongpress;
 
@@ -850,8 +851,15 @@ namespace FamiStudio
                         {
                             if (captureControl == ctrl)
                                 ReleasePointer();
-                            ctrl.SendPointerUp(new PointerEventArgs(x, y));
+
+                            // Keep track of long press, we use this for sequencer / piano roll.
+                            ctrl.SendPointerUp(new PointerEventArgs(x, y) 
+                            {
+                                IsLongPress = e.Action == MotionEventActions.Up && longPressControl == ctrl 
+                            });
                         }
+
+                        longPressControl = null;
                     }
 
                     doubleTapReceived = false;
@@ -931,7 +939,12 @@ namespace FamiStudio
                     if (!doubleTapReceived || doubleTapCanSendLongpress)
                     {
                         var ctrl = GetCapturedControlAtCoord(px, py, out var x, out var y);
-                        ctrl?.SendTouchLongPress(new PointerEventArgs(x, y) { IsDoubleTapLongPress = doubleTapReceived });
+                        if (ctrl != null)
+                        {
+                            // Long press for sequencer / piano roll selection.
+                            longPressControl = ctrl;
+                            ctrl.SendTouchLongPress(new PointerEventArgs(x, y) { IsDoubleTapLongPress = doubleTapReceived });
+                        }
                     }
                 }
             }

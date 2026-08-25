@@ -134,6 +134,7 @@ namespace FamiStudio
         Color blackKeyHoverColor           = Color.FromArgb( 60, Theme.WhiteColor);
         Color selectionBgVisibleColor      = Color.FromArgb( 64, Theme.LightGreyColor1);
         Color selectionBgInvisibleColor    = Color.FromArgb( 16, Theme.LightGreyColor1);
+        Color selectionHighlightColor      = Color.FromArgb( 64, Theme.WhiteColor);
         Color attackColor                  = Color.FromArgb(128, Theme.BlackColor);
         Color attackBrushForceDisplayColor = Color.FromArgb( 64, Theme.BlackColor);
         Color invalidDpcmMappingColor      = Color.FromArgb( 64, Theme.BlackColor);
@@ -3602,12 +3603,12 @@ namespace FamiStudio
                 r.c.FillRectangleGradient(0, activeChannelInt, sx, sy, color, color.Scaled(0.8f), true, sy);
 
                 if (selected && !legacySelectMode)
-                    r.c.FillRectangle(0, activeChannelInt, sx, sy, selectionBgVisibleColor);
+                    r.c.FillRectangle(0, activeChannelInt, sx, sy, selectionHighlightColor);
             }
 
             if (activeChannel)
             {
-                r.c.DrawRectangle(0, 0, sx, sy, outline ? Theme.WhiteColor : (selected ? Theme.LightGreyColor1 : Theme.BlackColor), selected || outline ? 3 : 1, selected || outline, selected || outline);
+                r.c.DrawRectangle(0, 0, sx, sy, outline ? Theme.WhiteColor : (selected ? legacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor : Theme.BlackColor), selected || outline ? 3 : 1, selected || outline, selected || outline);
             }
 
             if (!outline)
@@ -3662,7 +3663,7 @@ namespace FamiStudio
                     r.c.FillGeometry(geo[activeChannel ? 0 : 1], selectionBgVisibleColor, true);
             }
             if (activeChannel)
-                r.c.DrawGeometry(geo[0], outline ? Theme.WhiteColor : (selected ? Theme.LightGreyColor1 : Theme.BlackColor), outline || selected ? 3 : 1, true);
+                r.c.DrawGeometry(geo[0], outline ? Theme.WhiteColor : (selected ? legacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor : Theme.BlackColor), outline || selected ? 3 : 1, true);
             r.c.PopTransform();
 
             r.c.PushTranslation(x, y);
@@ -7898,6 +7899,14 @@ namespace FamiStudio
 
             Debug.WriteLine($"OnTouchUp {x} {y} {captureOperation}");
 
+            // In the modern select mode, we use long press release for the context menu here.
+            var context = !legacySelectMode && e.IsLongPress && captureOperation == CaptureOperation.Select && !captureThresholdMet;
+            if (context)
+            {
+                Platform.VibrateClick();
+                OnTouchLongPressRelease(e);
+            }
+
             EndCaptureOperation(x, y);
             SetMouseLastPos(x, y);
         }
@@ -8043,6 +8052,29 @@ namespace FamiStudio
                 return;
             }
 
+            // Send touch release if we are using legacy mode or selecting a note. Otherwise start selection.
+            var isNote = GetNoteForCoord(x, y, out _, out _, out _) != null;
+            if (legacySelectMode || editMode != EditionMode.Channel || isNote)
+            {
+                OnTouchLongPressRelease(e);
+            }
+            else if (editMode == EditionMode.Channel && IsPointInNoteArea(x, y))
+            {
+                Platform.VibrateClick();
+                StartSelection(x, y);
+            }
+
+            return;
+
+        Handled:
+            MarkDirty();
+        }
+
+        protected void OnTouchLongPressRelease(PointerEventArgs e)
+        {
+            var x = e.X;
+            var y = e.Y;
+
             if (editMode == EditionMode.Channel)
             {
                 if (HandleTouchLongPressChannelNote(x, y)) goto Handled;
@@ -8069,8 +8101,8 @@ namespace FamiStudio
 
             return;
 
-        Handled:
-            MarkDirty();
+            Handled:
+                MarkDirty();
         }
 
         public void LayoutChanged()

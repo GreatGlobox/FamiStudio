@@ -620,7 +620,7 @@ namespace FamiStudio
             highlightLocation = location;
         }
 
-        private void ClearHighlightedPatern()
+        private void ClearHighlightedPattern()
         {
             highlightLocation = PatternLocation.Invalid;
         }
@@ -1733,13 +1733,7 @@ namespace FamiStudio
         {
             if (e.Right && IsMouseInPatternZone(e))
             {
-                captureSelectedPatternLocations.Clear();
-
-                foreach (var location in selectedPatternLocations)
-                    captureSelectedPatternLocations.Add(location);
-
-                StartCaptureOperation(e.X, e.Y, CaptureOperation.SelectRectangle);
-
+                StartRectangleSelection(e.X, e.Y);
                 return true;
             }
 
@@ -1861,7 +1855,7 @@ namespace FamiStudio
                 else 
                 {
                     if (highlightLocation == location)
-                        ClearHighlightedPatern();
+                        ClearHighlightedPattern();
                     else
                         SetHighlightedPattern(location);
 
@@ -1944,7 +1938,7 @@ namespace FamiStudio
                 if (pattern != null)
                 {
                     DeletePattern(location);
-                    ClearHighlightedPatern();
+                    ClearHighlightedPattern();
                 }
 
                 return true;
@@ -2016,6 +2010,16 @@ namespace FamiStudio
             var patternDeltaIdx = highlightLocation.PatternIndex - selectionMin.PatternIndex;
 
             MoveCopyOrDuplicateSelection(channelDeltaIdx, patternDeltaIdx, true, copy);
+        }
+
+        private void StartRectangleSelection(int x, int y)
+        {
+            captureSelectedPatternLocations.Clear();
+
+            foreach (var location in selectedPatternLocations)
+                captureSelectedPatternLocations.Add(location);
+
+            StartCaptureOperation(x, y, CaptureOperation.SelectRectangle);
         }
 
         private bool UpdateSelectedPatternRefCounts()
@@ -2184,7 +2188,7 @@ namespace FamiStudio
 
                 if (IsSelectionValid())
                 {
-                    menu.Add(new ContextMenuOption("MenuClearSelection", ClearSelectionLabel, () => { ClearSelection(); ClearHighlightedPatern(); }, ContextMenuSeparator.Before));
+                    menu.Add(new ContextMenuOption("MenuClearSelection", ClearSelectionLabel, () => { ClearSelection(); ClearHighlightedPattern(); }, ContextMenuSeparator.Before));
                 }
 
                 if (pattern != null)
@@ -2256,6 +2260,14 @@ namespace FamiStudio
         {
             var x = e.X;
             var y = e.Y;
+
+            // In the modern select mode, we use long press release for the context menu here.
+            var context = !legacySelectMode && e.IsLongPress && captureOperation == CaptureOperation.SelectRectangle && !captureThresholdMet;
+            if (context)
+            {
+                Platform.VibrateClick();
+                OnTouchLongPressRelease(e);
+            }
 
             EndCaptureOperation(x, y);
             SetMouseLastPos(x, y);
@@ -2355,9 +2367,30 @@ namespace FamiStudio
             var y = e.Y;
 
             if (e.IsDoubleTapLongPress)
-            {
                 return;
+
+            AbortCaptureOperation();
+
+            // Send a touch release to trigger the context menu if using legacy. This
+            // is because in modern select mode, we trigger the menu on release instead.
+            if (legacySelectMode)
+            {
+                OnTouchLongPressRelease(e);
             }
+            else if (IsPointInPatternArea(x, y))
+            {
+                Platform.VibrateClick();
+                StartRectangleSelection(x, y);
+                captureThresholdMet = false;
+            }
+
+            MarkDirty();
+        }
+
+        protected void OnTouchLongPressRelease(PointerEventArgs e)
+        {
+            var x = e.X;
+            var y = e.Y;
 
             // Header:
             // - Context menu : seet loop point, custom settings
@@ -2365,11 +2398,6 @@ namespace FamiStudio
             // - Context menu : Mute/Unmute, Toggle force display, etc. (click on icon???)
             // Pattern area:
             // - Context menu : Pattern properties, etc. (if in selection)
-
-            AbortCaptureOperation();
-
-            if ((IsPointInPatternArea(x, y) || IsPointInHeader(x, y)) && !IsSelectionValid())
-                UpdateSelection(x, y, false);
 
             if (HandleTouchLongPressChannelName(x, y)) goto Handled;
             if (HandleTouchLongPressHeader(x, y)) goto Handled;
@@ -3875,6 +3903,7 @@ namespace FamiStudio
             var selectedPatternCount = selectedPatternLocations.Count;
             buffer.Serialize(ref selectedPatternCount);
 
+            // Necessary for us to properly undo / redo the modern selection style.
             if (buffer.IsWriting)
             {
                 foreach (var location in selectedPatternLocations.OrderBy(p => p.ChannelIndex).ThenBy(p => p.PatternIndex))
@@ -3900,6 +3929,8 @@ namespace FamiStudio
 
                     selectedPatternLocations.Add(new PatternLocation(channelIdx, patternIdx));
                 }
+                
+                ClearHighlightedPattern();
             }
 
             if (buffer.IsReading)
@@ -3910,6 +3941,7 @@ namespace FamiStudio
                 InvalidatePatternCache();
                 UpdateRenderCoords();
                 CancelDragSelection();
+                ClearHighlightedPattern();
                 MarkDirty();
             }
         }
