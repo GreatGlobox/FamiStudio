@@ -1516,7 +1516,7 @@ namespace FamiStudio
                 }
 
                 // Selection
-                DrawSelectionRect(r.c, headerSizeY);
+                DrawSelectionRect(r.c, headerSizeY, false, true);
 
                 var beatLabelSizeX = r.g.MeasureString("88.88", r.fonts.FontMedium);
 
@@ -2726,7 +2726,7 @@ namespace FamiStudio
             return false;
         }
 
-        private void DrawSelectionRect(CommandList c, int height, bool effectsPanel = false)
+        private void DrawSelectionRect(CommandList c, int height, bool effectsPanel = false, bool header = false)
         {
             if (!IsSelectionValid() || (captureOperation != CaptureOperation.Select && !legacySelectMode))
                 return;
@@ -2750,6 +2750,9 @@ namespace FamiStudio
 
             if (editMode == EditionMode.Channel && !legacySelectMode)
             {
+                if (header && !captureSelectionFromHeader)
+                    return;
+
                 // Modern channel selection rectangles are temporary while dragging.
                 if (captureOperation == CaptureOperation.Select)
                 {
@@ -8349,6 +8352,14 @@ namespace FamiStudio
                 return;
             }
 
+            if (editMode == EditionMode.Channel)
+            {
+                var songEnd = Song.GetPatternStartAbsoluteNoteIndex(Song.Length) - 1;
+
+                marqueeMinX = Utils.Clamp(marqueeMinX, 0, songEnd);
+                marqueeMaxX = Utils.Clamp(marqueeMaxX, 0, songEnd);
+            }
+
             captureMarqueeMinX = marqueeMinX;
             captureMarqueeMaxX = marqueeMaxX;
             
@@ -10872,6 +10883,32 @@ namespace FamiStudio
         }
 #endif
 
+        private void SerializeIntSet(ProjectBuffer buffer, HashSet<int> set)
+        {
+            var count = set.Count;
+            buffer.Serialize(ref count);
+
+            if (buffer.IsWriting)
+            {
+                foreach (var value in set.OrderBy(i => i))
+                {
+                    var v = value;
+                    buffer.Serialize(ref v);
+                }
+            }
+            else
+            {
+                set.Clear();
+
+                for (var i = 0; i < count; i++)
+                {
+                    var value = 0;
+                    buffer.Serialize(ref value);
+                    set.Add(value);
+                }
+            }
+        }
+
         public void Serialize(ProjectBuffer buffer)
         {
             int editModeInt = (int)editMode;
@@ -10907,6 +10944,10 @@ namespace FamiStudio
             buffer.Serialize(ref selectionMinX);
             buffer.Serialize(ref selectionMaxX);
             buffer.Serialize(ref relativeEffectScaling);
+            
+            SerializeIntSet(buffer, selectedNoteIndices);
+            SerializeIntSet(buffer, selectedEffectIndices);
+            SerializeIntSet(buffer, selectedEnvelopeIndices);
 
             if (Platform.IsMobile)
             {

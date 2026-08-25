@@ -1318,6 +1318,7 @@ namespace FamiStudio
 
         private void ApplySettings()
         {
+            Sequencer.ApplySettings();
             PianoRoll.ApplySettings();
         }
 
