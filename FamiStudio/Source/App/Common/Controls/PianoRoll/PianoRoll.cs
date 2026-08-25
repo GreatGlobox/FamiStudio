@@ -9082,20 +9082,41 @@ namespace FamiStudio
                 {
                     GetLocationForCoord(pos.X, pos.Y, out var location, out var noteValue);
 
-                    // If dragging inside the selection, replace that.
-                    if (IsSelectionValid() && (IsNoteSelected(location) || forceInSelection))
+                    Note note = null;
+                    var inSelection = false;
+
+                    if (IsSelectionValid())
                     {
-                        TransformNotes(selectionMinX, selectionMaxX, true, true, false, (note, idx) =>
+                        if (legacySelectMode)
                         {
-                            if (note != null && note.IsMusical && (matchInstrument == null || note.Instrument == matchInstrument))
-                                note.Instrument = instrument;
-                            return note;
+                            inSelection = IsNoteSelected(location);
+                        }
+                        else
+                        {
+                            note = channel.FindMusicalNoteAtLocation(ref location, noteValue);
+                            inSelection = note != null && IsNoteSelected(location);
+                        }
+                    }
+
+                    // If dragging inside the selection, replace that. (legacy)
+                    if (inSelection || forceInSelection)
+                    {
+                        TransformNotes(selectionMinX, selectionMaxX, true, true, false, (n, idx) =>
+                        {
+                            var selected = legacySelectMode || selectedNoteIndices.Contains(idx);
+                            if (selected && n != null && n.IsMusical && (matchInstrument == null || n.Instrument == matchInstrument))
+                            {
+                                n.Instrument = instrument;
+                            }
+
+                            return n;
                         });
                     }
-                    else 
+                    else
                     {
                         // Otherwise see if a note is under the cursor.
-                        var note = channel.FindMusicalNoteAtLocation(ref location, noteValue);
+                        note ??= channel.FindMusicalNoteAtLocation(ref location, noteValue);
+
                         if (note != null)
                         {
                             var pattern = channel.PatternInstances[location.PatternIndex];
@@ -9125,20 +9146,41 @@ namespace FamiStudio
                 {
                     GetLocationForCoord(pos.X, pos.Y, out var location, out var noteValue);
 
-                    // If dragging inside the selection, replace that.
-                    if (IsSelectionValid() && (IsNoteSelected(location) || forceInSelection))
+                    Note note = null;
+                    var inSelection = false;
+
+                    if (IsSelectionValid())
                     {
-                        TransformNotes(selectionMinX, selectionMaxX, true, true, false, (note, idx) =>
+                        if (legacySelectMode)
                         {
-                            if (note != null && note.IsMusical && (matchArpeggio == null || note.Arpeggio == matchArpeggio))
-                                note.Arpeggio = arpeggio;
-                            return note;
+                            inSelection = IsNoteSelected(location);
+                        }
+                        else
+                        {
+                            note = channel.FindMusicalNoteAtLocation(ref location, noteValue);
+                            inSelection = note != null && IsNoteSelected(location);
+                        }
+                    }
+
+                    // If dragging inside the selection, replace that. (legacy)
+                    if (inSelection || forceInSelection)
+                    {
+                        TransformNotes(selectionMinX, selectionMaxX, true, true, false, (n, idx) =>
+                        {
+                            var selected = legacySelectMode || selectedNoteIndices.Contains(idx);
+                            if (selected && n != null && n.IsMusical && (matchArpeggio == null || n.Arpeggio == matchArpeggio))
+                            {
+                                n.Arpeggio = arpeggio;
+                            }
+
+                            return n;
                         });
                     }
                     else
                     {
                         // Otherwise see if a note is under the cursor.
-                        var note = channel.FindMusicalNoteAtLocation(ref location, noteValue);
+                        note ??= channel.FindMusicalNoteAtLocation(ref location, noteValue);
+
                         if (note != null)
                         {
                             App.UndoRedoManager.BeginTransaction(TransactionScope.Pattern, channel.PatternInstances[location.PatternIndex].Id);
