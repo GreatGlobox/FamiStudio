@@ -293,8 +293,8 @@ namespace FamiStudio
                     page.AddDropDownList(FollowViewsLabel.Colon, Localization.ToStringArray(FollowSyncStrings), FollowSyncStrings[followSyncIndex], FollowingViewsTooltip); // 3
                     page.AddSlider(FollowRangeLabel.Colon, Settings.FollowPercent, 0.05, 0.95, (v) => $"{v:P0}", FollowRangeTooltip); // 4
                     page.AddDropDownList(ScrollBarsLabel.Colon, Localization.ToStringArray(ScrollBarsStrings), ScrollBarsStrings[Settings.ScrollBars], ScrollBarsTooltip); // 5
-                    page.AddDropDownList(IdealSeqHeightLabel.Colon, IdealSequencerHeightStrings, IdealSequencerHeightStrings[GetSequencerSizeIndex(Settings.IdealSequencerSize)], IdealSequencerHeightTooltip); // 6
-                    page.AddDropDownList(DpcmColorModeLabel.Colon, Localization.ToStringArray(DpcmColorModeStrings), DpcmColorModeStrings[Settings.DpcmColorMode], DpcmColorModeTooltip); // 7
+                    page.AddDropDownList(DpcmColorModeLabel.Colon, Localization.ToStringArray(DpcmColorModeStrings), DpcmColorModeStrings[Settings.DpcmColorMode], DpcmColorModeTooltip); // 6
+                    page.AddDropDownList(IdealSeqHeightLabel.Colon, IdealSequencerHeightStrings, IdealSequencerHeightStrings[GetSequencerSizeIndex(Settings.IdealSequencerSize)], IdealSequencerHeightTooltip); // 7
                     page.AddCheckBox(AllowSeqVertScrollLabel.Colon, Settings.AllowSequencerVerticalScroll, AllowSequencerScrollTooltip); // 8
                     page.AddCheckBox(ShowFamitrackerStopLabel.Colon, Settings.ShowImplicitStopNotes, ShowFamitrackerStopNotesTooltip); // 9
                     page.AddCheckBox(ShowRegisterViewerLabel.Colon, Settings.ShowRegisterViewer, ShowRegisterViewerTooltip); // 10
@@ -302,11 +302,14 @@ namespace FamiStudio
                     page.AddCheckBox(UseLegacySelectionModeLabel.Colon, Settings.UseLegacySelectionMode, UseLegacySelectionModeTooltip); // 12
                     page.AddCheckBox(UseOSDialogsLabel.Colon, Settings.UseOSDialogs, UseOSDialogsTooltip); // 13
                         
+                    page.SetPropertyEnabled(7, !Settings.AllowSequencerVerticalScroll);
+                    
                     page.SetPropertyVisible(3, Platform.IsDesktop);
                     page.SetPropertyVisible(5, Platform.IsDesktop);
-                    page.SetPropertyVisible(6, Platform.IsDesktop);
+                    page.SetPropertyVisible(7, Platform.IsDesktop);
                     page.SetPropertyVisible(8, Platform.IsDesktop);
                     page.SetPropertyVisible(13, Platform.IsDesktop);
+                    page.PropertyChanged += UserInterfacePage_PropertyChanged;
                     break;
                 }
                 case ConfigSection.Input:
@@ -394,6 +397,12 @@ namespace FamiStudio
             pages[(int)section] = page;
 
             return page;
+        }
+
+        private void UserInterfacePage_PropertyChanged(PropertyPage props, int propIdx, int rowIdx, int colIdx, object value)
+        {
+            if (propIdx == 8)
+                props.SetPropertyEnabled(7, !(bool)value);
         }
 
         private void InputPage_PropertyChanged(PropertyPage props, int propIdx, int rowIdx, int colIdx, object value)
@@ -579,8 +588,8 @@ namespace FamiStudio
                     Settings.FollowSync = pageUI.GetSelectedIndex(3);
                     Settings.FollowPercent = (float)pageUI.GetPropertyValue<double>(4);
                     Settings.ScrollBars = pageUI.GetSelectedIndex(5);
-                    Settings.IdealSequencerSize = Utils.ParseIntWithTrailingGarbage(pageUI.GetPropertyValue<string>(6));
-                    Settings.DpcmColorMode = pageUI.GetSelectedIndex(7);
+                    Settings.DpcmColorMode = pageUI.GetSelectedIndex(6);
+                    Settings.IdealSequencerSize = Utils.ParseIntWithTrailingGarbage(pageUI.GetPropertyValue<string>(7));
                     Settings.AllowSequencerVerticalScroll = pageUI.GetPropertyValue<bool>(8);
                     Settings.ShowImplicitStopNotes = pageUI.GetPropertyValue<bool>(9);
                     Settings.ShowRegisterViewer = pageUI.GetPropertyValue<bool>(10);

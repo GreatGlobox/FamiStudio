@@ -247,6 +247,9 @@ namespace FamiStudio
         public static bool SnapEnabled = true;
         public static bool SnapEffects = false;
 
+        // Sequencer stuff
+        public static int SequencerHeight = 228;
+
         public delegate void EmptyDelegate();
         public static event EmptyDelegate KeyboardShortcutsChanged;
 
@@ -618,6 +621,9 @@ namespace FamiStudio
             SnapEnabled = ini.GetBool("PianoRoll", "SnapEnabled", true);
             SnapEffects = ini.GetBool("PianoRoll", "SnapEffects", false);
 
+            // Sequencer section
+            SequencerHeight = ini.GetInt("Sequencer", "Height", 228);
+
             // At 4.0.0, we fixed an issue where the snapping was not saved properly. Reset.
             if (Version < 7)
             {
@@ -760,6 +766,9 @@ namespace FamiStudio
             ini.SetInt("PianoRoll", "SnapResolution", SnapResolution);
             ini.SetBool("PianoRoll", "SnapEnabled", SnapEnabled);
             ini.SetBool("PianoRoll", "SnapEffects", SnapEffects);
+
+            // Sequencer section
+            ini.SetInt("Sequencer", "Height", SequencerHeight);
 
             Directory.CreateDirectory(GetConfigFilePath());
 

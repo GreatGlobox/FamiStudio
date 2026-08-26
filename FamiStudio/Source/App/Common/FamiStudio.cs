@@ -1324,6 +1324,7 @@ namespace FamiStudio
 
         private void SaveSettings()
         {
+            Sequencer.SaveSettings();
             PianoRoll.SaveSettings();
             Settings.Save();
         }

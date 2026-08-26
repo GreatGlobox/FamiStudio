@@ -53,21 +53,7 @@ namespace FamiStudio
 
         protected override void OnResize(EventArgs e)
         {
-            int toolBarHeight = DpiScaling.ScaleForWindow(40);
-            int projectExplorerWidth = DpiScaling.ScaleForWindow(300);
-            int sequencerHeight = pianoRoll.IsMaximized ? 0 : DpiScaling.ScaleForWindow(sequencer.ComputeDesiredSizeY(out _, out _));
-
-            toolbar.Move(0, 0, width, toolBarHeight);
-            projectExplorer.Move(width - projectExplorerWidth, toolBarHeight, projectExplorerWidth, height - toolBarHeight);
-            sequencer.Move(0, toolBarHeight, width - projectExplorerWidth, sequencerHeight);
-            pianoRoll.Move(0, toolBarHeight + sequencerHeight, width - projectExplorerWidth, height - toolBarHeight - sequencerHeight);
-
-            foreach (var dlg in dialogs)
-                dlg.CenterToWindow();
-
-            HideContextMenu();
-
-            toast.Reposition();
+            UpdateLayout();
         }
 
         public override bool CanInteractWithContainer(Container c)
@@ -238,7 +224,21 @@ namespace FamiStudio
 
         public void UpdateLayout()
         {
-            // Only for mobile.
+            // Moved onresize code to here since it also gets called to resize the sequencer.
+            int toolBarHeight = DpiScaling.ScaleForWindow(40);
+            int projectExplorerWidth = DpiScaling.ScaleForWindow(300);
+            int sequencerHeight = pianoRoll.IsMaximized ? 0 : DpiScaling.ScaleForWindow(sequencer.ComputeDesiredSizeY(out _, out _));
+
+            toolbar.Move(0, 0, width, toolBarHeight);
+            projectExplorer.Move(width - projectExplorerWidth,toolBarHeight, projectExplorerWidth, height - toolBarHeight);
+            sequencer.Move(0, toolBarHeight, width - projectExplorerWidth, sequencerHeight);
+            pianoRoll.Move(0, toolBarHeight + sequencerHeight, width - projectExplorerWidth, height - toolBarHeight - sequencerHeight);
+
+            foreach (var dlg in dialogs)
+                dlg.CenterToWindow();
+
+            HideContextMenu();
+            toast.Reposition();
         }
     }
 }
