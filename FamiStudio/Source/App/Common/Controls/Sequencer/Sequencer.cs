@@ -2461,6 +2461,7 @@ namespace FamiStudio
             App.UndoRedoManager.BeginTransaction(createAnythingMissing ? TransactionScope.Project : TransactionScope.Song, Song.Id);
 
             var song = Song;
+            var pasteIdx = legacySelectMode ? selectionMin.PatternIndex : song.PatternIndexFromAbsoluteNoteIndex(App.CurrentFrame);
             var patterns = ClipboardUtils.LoadPatterns(song, instImportFlags, arpImportFlags, sampleImportFlags, patternImportFlags, out var customSettings);
 
             if (patterns == null)
@@ -2485,7 +2486,7 @@ namespace FamiStudio
                 }
 
                 // Move everything to the right.
-                for (int i = song.Length - 1; i >= selectionMin.PatternIndex + numColumnsToPaste; i--)
+                for (int i = pasteIdx; i < pasteIdx + numColumnsToPaste && i < song.Length; i++)
                 {
                     var srcIndex = i - numColumnsToPaste;
 
@@ -2518,7 +2519,7 @@ namespace FamiStudio
             }
             
             // Then do the actual paste.
-            var startPatternIndex = selectionMin.PatternIndex;
+            var startPatternIndex = pasteIdx;
 
             for (int r = 0; r < repeat; r++)
             {
@@ -2552,7 +2553,7 @@ namespace FamiStudio
                         }
                         else
                         {
-                            Song.ClearPatternCustomSettings(i + selectionMin.PatternIndex);
+                            Song.ClearPatternCustomSettings(i + pasteIdx);
                         }
                     }
                 }
@@ -2560,7 +2561,9 @@ namespace FamiStudio
                 startPatternIndex += patterns.GetLength(0);
             }
 
-            selectionMax.PatternIndex = selectionMin.PatternIndex + numColumnsToPaste - 1;
+            selectionMin.PatternIndex = pasteIdx;
+            selectionMax.PatternIndex = Math.Min(pasteIdx + numColumnsToPaste - 1, Song.Length - 1);
+
             selectionMin.ChannelIndex = 0;
             selectionMax.ChannelIndex = Song.Channels.Length - 1;
 

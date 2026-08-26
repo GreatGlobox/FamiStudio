@@ -773,6 +773,7 @@ namespace FamiStudio
                 AbortCaptureOperation();
                 editChannel = channelIdx;
                 noteTooltip = "";
+                ClearSelection();
                 BuildSupportEffectList();
                 MarkDirty();
             }
