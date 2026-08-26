@@ -134,7 +134,7 @@ namespace FamiStudio
         Color blackKeyHoverColor           = Color.FromArgb( 60, Theme.WhiteColor);
         Color selectionBgVisibleColor      = Color.FromArgb( 64, Theme.LightGreyColor1);
         Color selectionBgInvisibleColor    = Color.FromArgb( 16, Theme.LightGreyColor1);
-        Color selectionHighlightColor      = Color.FromArgb( 64, Theme.WhiteColor);
+        Color selectionHighlightColor      = Color.FromArgb(128, Theme.WhiteColor);
         Color attackColor                  = Color.FromArgb(128, Theme.BlackColor);
         Color attackBrushForceDisplayColor = Color.FromArgb( 64, Theme.BlackColor);
         Color invalidDpcmMappingColor      = Color.FromArgb( 64, Theme.BlackColor);
@@ -198,6 +198,7 @@ namespace FamiStudio
             MoveNoteRelease,
             MoveSelectionNoteRelease,
             ChangeEnvelopeValue,
+            EditEffectSelection,
             MobileZoom,
             MobileZoomVertical,
             MobilePan
@@ -243,6 +244,7 @@ namespace FamiStudio
             ThesholdSmallMobileOnly,  // MoveNoteRelease
             ThesholdSmallMobileOnly,  // MoveSelectionNoteRelease
             0,                        // ChangeEnvelopeValue
+            ThesholdSmall,            // EditEffectSelection
             0,                        // MobileZoom
             0,                        // MobileZoomVertical
             0,                        // MobilePan
@@ -283,6 +285,7 @@ namespace FamiStudio
             false,             // MoveNoteRelease
             false,             // MoveSelectionNoteRelease
             false,             // ChangeEnvelopeValue
+            true,              // EditEffectSelection
             false,             // MobileZoom
             false,             // MobileZoomVertical
             false,             // MobilePan
@@ -334,6 +337,7 @@ namespace FamiStudio
         bool captureRealTimeUpdate = false;
         bool captureSelectionFromHeader = false;
         bool captureSelectionFromEffectPanel = false;
+        bool captureEffectSelectionMove = false;
         bool panning = false;
         bool continuouslyFollowing = false;
         bool maximized = false;
@@ -367,11 +371,12 @@ namespace FamiStudio
         SortedList<int, Note> dragNotes = new SortedList<int, Note>();
         SortedList<int, int> dragEffects = new SortedList<int, int>();
 
-        // 2D selection for note area.
+        // 2D selection for note and effects area.
         bool legacySelectMode = Settings.UseLegacySelectionMode;
         HashSet<int> selectedNoteIndices = new HashSet<int>();
         HashSet<int> captureSelectedNoteIndices = new HashSet<int>();
         HashSet<int> selectedEffectIndices = new HashSet<int>();
+        HashSet<int> captureSelectedEffectIndices = new HashSet<int>();
 
         // Envelope selections.
         HashSet<int> selectedEnvelopeIndices = new HashSet<int>();
@@ -478,10 +483,10 @@ namespace FamiStudio
         public bool IsEditingDPCMSample        => editMode == EditionMode.DPCM;
         public bool IsEditingDPCMSampleMapping => editMode == EditionMode.DPCMMapping;
         
-        public bool CanCopy       => IsActiveControl && IsSelectionValid() && (editMode == EditionMode.Channel || editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio);
+        public bool CanCopy       => IsActiveControl && HasSelectionContent() && (editMode == EditionMode.Channel || editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio);
         public bool CanCopyAsText => IsActiveControl && IsSelectionValid() && (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio);
-        public bool CanPaste      => IsActiveControl && IsSelectionValid() && (editMode == EditionMode.Channel && ClipboardUtils.ContainsNotes || (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio) && ClipboardUtils.ContainsEnvelope);
-        public bool CanDelete     => IsActiveControl && IsSelectionValid() && (editMode == EditionMode.Channel || editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio || editMode == EditionMode.DPCM);
+        public bool CanPaste      => IsActiveControl && (editMode == EditionMode.Channel ? ClipboardUtils.ContainsNotes && (!legacySelectMode || IsSelectionValid()) : (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio) && IsSelectionValid() && ClipboardUtils.ContainsEnvelope);
+        public bool CanDelete     => IsActiveControl && HasSelectionContent() && (editMode == EditionMode.Channel || editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio || editMode == EditionMode.DPCM);
         public bool IsActiveControl => App != null && App.ActiveControl == this;
 
         public static int DefaultPianoKeyWidth => DefaultNoteSizeY;
@@ -2309,13 +2314,97 @@ namespace FamiStudio
 
         private void CopyNotes()
         {
-            ClipboardUtils.SaveNotes(App.Project, GetSelectedNotes(false));
+            if (legacySelectMode)
+            {
+                ClipboardUtils.SaveNotes(App.Project, GetSelectedNotes());
+                return;
+            }
+
+            var channel = Song.Channels[editChannel];
+            var copyMin = selectionMinX;
+            var copyMax = selectionMaxX;
+            var noteRanges = new List<(int min, int max)>();
+
+            foreach (var idx in selectedNoteIndices)
+            {
+                var absoluteIdx = selectionMinX + idx;
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
+                var note = channel.GetNoteAt(location);
+
+                if (note == null || !note.IsMusical)
+                    continue;
+
+                var duration = Math.Max(1, GetVisualNoteDuration(location, note));
+                var end = absoluteIdx + duration - 1;
+
+                noteRanges.Add((absoluteIdx, end));
+                copyMax = Math.Max(copyMax, end);
+            }
+
+            var notes = new Note[copyMax - copyMin + 1];
+
+            TransformNotes(copyMin, copyMax, false, false, false, (note, idx) =>
+            {
+                if (note == null)
+                    return note;
+
+                var absoluteIdx = copyMin + idx;
+                var selectedNoteIdx = absoluteIdx - selectionMinX;
+
+                // Wndure we copy every effect of the selected note.
+                if (selectedNoteIndices.Contains(selectedNoteIdx))
+                {
+                    notes[idx] = note.Clone();
+                    return note;
+                }
+
+                var inNoteBody = false;
+
+                foreach (var range in noteRanges)
+                {
+                    if (absoluteIdx >= range.min && absoluteIdx <= range.max)
+                    {
+                        inNoteBody = true;
+                        break;
+                    }
+                }
+
+                var selectedEffect = selectedEffectIdx >= 0 && selectedEffectIndices.Contains(absoluteIdx) && note.HasValidEffectValue(selectedEffectIdx);
+                if (!inNoteBody && !selectedEffect)
+                    return note;
+
+                var clone = note.Clone();
+
+                // We only want effects from the note.
+                clone.Clear(true);
+
+                if (!inNoteBody)
+                {
+                    for (var effectIdx = 0; effectIdx < Note.EffectCount; effectIdx++)
+                    {
+                        if (effectIdx != selectedEffectIdx)
+                            clone.ClearEffectValue(effectIdx);
+                    }
+                }
+
+                if (!clone.HasAnyEffect)
+                    clone = null;
+
+                notes[idx] = clone;
+
+                return note;
+            });
+
+            ClipboardUtils.SaveNotes(App.Project, notes);
         }
 
         private void CutNotes()
         {
             CopyNotes();
             DeleteSelectedNotes();
+
+            if (!legacySelectMode)
+                ClearSelection();
         }
 
         private void ReplaceNotes(Note[] notes, int startFrameIdx, bool doTransaction, bool pasteNotes = true, int pasteFxMask = Note.EffectAllMask, bool mix = false)
@@ -2324,6 +2413,9 @@ namespace FamiStudio
             {
                 var channel = Song.Channels[editChannel];
                 var newNote = notes[idx];
+
+                if (!legacySelectMode && newNote == null)
+                    return note;
 
                 if (newNote == null)
                     newNote = Note.EmptyNote;
@@ -2380,11 +2472,36 @@ namespace FamiStudio
             });
 
             SetSelection(startFrameIdx, startFrameIdx + notes.Length - 1);
+
+            if (!legacySelectMode)
+            {
+                selectedNoteIndices.Clear();
+                selectedEffectIndices.Clear();
+
+                for (var i = 0; i < notes.Length; i++)
+                {
+                    var newNote = notes[i];
+                    if (newNote == null || newNote.IsEmpty)
+                        continue;
+
+                    var absoluteIdx = startFrameIdx + i;
+
+                    if (pasteNotes && newNote.IsMusicalOrStop)
+                        selectedNoteIndices.Add(i);
+
+                    if (selectedEffectIdx >= 0 && (pasteFxMask & (1 << selectedEffectIdx)) != 0 && newNote.HasValidEffectValue(selectedEffectIdx))
+                    {
+                        selectedEffectIndices.Add(absoluteIdx);
+                    }
+                }
+
+                PostProcessSelection();
+            }
         }
 
-        private void PasteNotes(bool pasteNotes, int pasteFxMask, bool mix, int repeat, ClipboardImportFlags instImportFlags, ClipboardImportFlags arpImportFlags, ClipboardImportFlags sampleImportFlags)
+        private void PasteNotes(bool pasteNotes, int pasteFxMask, bool mix, int repeat, ClipboardImportFlags instImportFlags, ClipboardImportFlags arpImportFlags, ClipboardImportFlags sampleImportFlags, int padding = 0)
         {
-            if (!IsSelectionValid())
+            if (legacySelectMode && !IsSelectionValid())
                 return;
 
             var createAnythingMissing =
@@ -2392,24 +2509,39 @@ namespace FamiStudio
                 arpImportFlags.HasFlag(ClipboardImportFlags.CreateMissing)  ||
                 sampleImportFlags.HasFlag(ClipboardImportFlags.CreateMissing);
 
+            var start = legacySelectMode ? selectionMinX : App.CurrentFrame;
+
             App.UndoRedoManager.BeginTransaction(createAnythingMissing ? TransactionScope.Project : TransactionScope.Channel, Song.Id, editChannel);
 
-            for (int i = 0; i < repeat && IsSelectionValid(); i++)
+            for (int i = 0; i < repeat; i++)
             {
                 var notes = ClipboardUtils.LoadNotes(App.Project, instImportFlags, arpImportFlags, sampleImportFlags);
-
                 if (notes == null)
                 {
                     App.UndoRedoManager.AbortTransaction();
                     return;
                 }
 
-                ReplaceNotes(notes, selectionMinX, false, pasteNotes, pasteFxMask, mix);
+                var clipboardHasNotes = false;
+                var repeatLength = notes.Length;
+
+                for (var j = 0; j < notes.Length; j++)
+                {
+                    var note = notes[j];
+                    if (note != null && note.IsMusicalOrStop)
+                    {
+                        clipboardHasNotes = true;
+
+                        if (!legacySelectMode)
+                            repeatLength = Math.Max(repeatLength, j + note.Duration);
+                    }
+                }
+
+                ReplaceNotes(notes, start, false, pasteNotes && clipboardHasNotes, pasteFxMask, mix);
 
                 if (i != repeat - 1)
                 {
-                    int selectionSize = selectionMaxX - selectionMinX + 1;
-                    SetSelection(selectionMinX + selectionSize, selectionMaxX + selectionSize);
+                    start += repeatLength + padding;
                 }
             }
 
@@ -2417,7 +2549,7 @@ namespace FamiStudio
             App.UndoRedoManager.EndTransaction();
         }
         
-        private void PasteNotesWithConflictDialog(bool pasteNotes = true, int pasteFxMask = Note.EffectAllMask, bool mix = false, int repeat = 1)
+        private void PasteNotesWithConflictDialog(bool pasteNotes = true, int pasteFxMask = Note.EffectAllMask, bool mix = false, int repeat = 1, int padding = 0)
         {
             if (!ClipboardUtils.GetClipboardContentFlags(Song, true, out var instFlags, out var arpFlags, out var sampleFlags, out var patternFlags))
             {
@@ -2437,13 +2569,13 @@ namespace FamiStudio
                 {
                     if (r == DialogResult.OK)
                     {
-                        PasteNotes(pasteNotes, pasteFxMask, mix, repeat, dlg.InstrumentFlags, dlg.ArpeggioFlags, dlg.DPCMSampleFlags);
+                        PasteNotes(pasteNotes, pasteFxMask, mix, repeat, dlg.InstrumentFlags, dlg.ArpeggioFlags, dlg.DPCMSampleFlags, padding);
                     }
                 });
             }
             else
             {
-                PasteNotes(pasteNotes, pasteFxMask, mix, repeat, ClipboardImportFlags.MatchByName, ClipboardImportFlags.MatchByName, ClipboardImportFlags.MatchByName);
+                PasteNotes(pasteNotes, pasteFxMask, mix, repeat, ClipboardImportFlags.MatchByName, ClipboardImportFlags.MatchByName, ClipboardImportFlags.MatchByName, padding);
             }
         }
 
@@ -2512,6 +2644,9 @@ namespace FamiStudio
         {
             CopyEnvelopeValues(false);
             DeleteSelectedEnvelopeValues();
+
+            if (!legacySelectMode)
+                ClearSelection();
         }
 
         private void ReplaceEnvelopeValues(sbyte[] values, int startIdx)
@@ -2572,7 +2707,13 @@ namespace FamiStudio
         public void Delete()
         {
             if (editMode == EditionMode.Channel)
-                DeleteSelectedNotes();
+            {
+                // We can delete effects separately if not using legacy mode.
+                if (!legacySelectMode && selectedNoteIndices.Count == 0 && selectedEffectIndices.Count > 0)
+                    ClearSelectedEffectValues();
+                else
+                    DeleteSelectedNotes();
+            }
             else if (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio)
                 DeleteSelectedEnvelopeValues();
             else if (editMode == EditionMode.DPCM)
@@ -2585,7 +2726,7 @@ namespace FamiStudio
             {
                 AbortCaptureOperation();
 
-                var dlg = new PasteSpecialDialog(ParentWindow, Song.Channels[editChannel], lastPasteSpecialPasteMix, lastPasteSpecialPasteNotes, lastPasteSpecialPasteEffectMask);
+                var dlg = new PasteSpecialDialog(ParentWindow, Song.Channels[editChannel], lastPasteSpecialPasteMix, lastPasteSpecialPasteNotes, lastPasteSpecialPasteEffectMask, !legacySelectMode);
 
                 dlg.ShowDialogAsync((r) =>
                 {
@@ -2597,7 +2738,7 @@ namespace FamiStudio
                         if ((effectMask & Note.EffectVolumeMask) != 0 && Song.Channels[editChannel].SupportsEffect(Note.EffectVolumeSlide))
                             effectMask |= Note.EffectVolumeAndSlideMask;
 
-                        PasteNotesWithConflictDialog(dlg.PasteNotes, effectMask, dlg.PasteMix, dlg.PasteRepeat);
+                        PasteNotesWithConflictDialog(dlg.PasteNotes, effectMask, dlg.PasteMix, dlg.PasteRepeat, dlg.Padding);
 
                         lastPasteSpecialPasteMix = dlg.PasteMix;
                         lastPasteSpecialPasteNotes = dlg.PasteNotes;
@@ -2612,7 +2753,13 @@ namespace FamiStudio
             if (editMode == EditionMode.DPCM)
                 DeleteSelectedWaveSection();
             else if (editMode == EditionMode.Channel)
-                DeleteSelectedNotes();
+            {
+                // We can delete effects separately if not using legacy mode.
+                if (!legacySelectMode && selectedNoteIndices.Count == 0 && selectedEffectIndices.Count > 0)
+                    ClearSelectedEffectValues();
+                else
+                    DeleteSelectedNotes();
+            }
             else if (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio)
                 DeleteSelectedEnvelopeValues();
         }
@@ -2681,6 +2828,11 @@ namespace FamiStudio
 
             if (captureOperation == CaptureOperation.Select && captureSelectionFromEffectPanel)
             {
+                if (ModifierKeys.IsControlDown)
+                {
+                    return captureSelectedEffectIndices.Contains(absoluteIdx) || (absoluteIdx >= captureMarqueeMinX && absoluteIdx <= captureMarqueeMaxX);
+                }
+
                 return absoluteIdx >= captureMarqueeMinX && absoluteIdx <= captureMarqueeMaxX;
             }
 
@@ -3603,7 +3755,7 @@ namespace FamiStudio
                 r.c.FillRectangleGradient(0, activeChannelInt, sx, sy, color, color.Scaled(0.8f), true, sy);
 
                 if (selected && !legacySelectMode)
-                    r.c.FillRectangle(0, activeChannelInt, sx, sy, selectionHighlightColor);
+                    r.c.FillRectangleGradient(0, activeChannelInt, sx, sy,  selectionHighlightColor, selectionHighlightColor.Scaled(0.8f), true, sy);
             }
 
             if (activeChannel)
@@ -3660,7 +3812,7 @@ namespace FamiStudio
                 r.c.FillGeometryGradient(geo[activeChannel ? 0 : 1], color, color.Scaled(0.8f), noteSizeY);
 
                 if (selected && !legacySelectMode)
-                    r.c.FillGeometry(geo[activeChannel ? 0 : 1], selectionBgVisibleColor, true);
+                    r.c.FillGeometryGradient(geo[activeChannel ? 0 : 1], selectionHighlightColor, selectionHighlightColor.Scaled(0.8f), noteSizeY);
             }
             if (activeChannel)
                 r.c.DrawGeometry(geo[0], outline ? Theme.WhiteColor : (selected ? legacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor : Theme.BlackColor), outline || selected ? 3 : 1, true);
@@ -4277,31 +4429,129 @@ namespace FamiStudio
             var channel   = Song.Channels[editChannel];
             var pattern   = channel.PatternInstances[location.PatternIndex];
             var note      = channel.GetNoteAt(location);
-            var selection = IsEffectFrameSelected(location.ToAbsoluteNoteIndex(Song)) && note != null && note.HasValidEffectValue(selectedEffectIdx);
+            var hasValue  = note != null && note.HasValidEffectValue(selectedEffectIdx);
+            var selection = IsEffectFrameSelected(location.ToAbsoluteNoteIndex(Song)) && hasValue;
+            var newSelect = selection && !legacySelectMode;
 
-            StartCaptureOperation(x, y, selection ? CaptureOperation.ChangeSelectionEffectValue : CaptureOperation.ChangeEffectValue, false, location.ToAbsoluteNoteIndex(Song));
+            if (!legacySelectMode && !hasValue)
+                ClearSelection();
 
-            var minPatternIdx = Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX);
-            var maxPatternIdx = Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX);
+            captureEffectSelectionMove = false;
 
-            if (selection && minPatternIdx != maxPatternIdx || pattern == null)
+            StartCaptureOperation(x, y, newSelect ? CaptureOperation.EditEffectSelection : selection ? CaptureOperation.ChangeSelectionEffectValue : CaptureOperation.ChangeEffectValue, false, location.ToAbsoluteNoteIndex(Song));
+
+            // Use channel scope for the experimental effect drag.
+            // This lets effects cross pattern boundaries without transaction promotion.
+            if (newSelect)
             {
                 App.UndoRedoManager.BeginTransaction(TransactionScope.Channel, Song.Id, editChannel);
 
-                if (pattern == null)
-                    pattern = channel.CreatePatternAndInstance(location.PatternIndex);
+                dragEffects.Clear();
+
+                foreach (var absoluteIdx in selectedEffectIndices)
+                {
+                    var effectLocation = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
+                    var effectNote = channel.GetNoteAt(effectLocation);
+
+                    if (effectNote != null && effectNote.HasValidEffectValue(selectedEffectIdx))
+                    {
+                        dragEffects[absoluteIdx] = effectNote.GetEffectValue(selectedEffectIdx);
+                    }
+                }
             }
             else
             {
-                App.UndoRedoManager.BeginTransaction(TransactionScope.Pattern, pattern.Id);
-            }
+                var minPatternIdx = Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX);
+                var maxPatternIdx = Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX);
 
-            UpdateChangeEffectValue(x, y);
+                if (selection && minPatternIdx != maxPatternIdx || pattern == null)
+                {
+                    App.UndoRedoManager.BeginTransaction(TransactionScope.Channel, Song.Id, editChannel);
+
+                    if (pattern == null)
+                        pattern = channel.CreatePatternAndInstance(location.PatternIndex);
+                }
+                else
+                {
+                    App.UndoRedoManager.BeginTransaction(TransactionScope.Pattern, pattern.Id);
+                }
+
+                UpdateChangeEffectValue(x, y);
+            }
         }
 
         float GetEffectValueExponent(int maxValue)
         {
             return 1.0f / (maxValue >= 4095 ? 4 : 1);
+        }
+
+        private void UpdateEditEffectSelection(int x, int y)
+        {
+            if (!captureEffectSelectionMove)
+            {
+                var dx = Math.Abs(x - captureMouseX);
+                var dy = Math.Abs(y - captureMouseY);
+
+                if (dx > dy)
+                {
+                    captureEffectSelectionMove = true;
+                }
+                else
+                {
+                    captureOperation = CaptureOperation.ChangeSelectionEffectValue;
+                    UpdateChangeEffectValue(x, y);
+                    return;
+                }
+            }
+
+            UpdateEffectSelectionMove(x);
+        }
+
+        private void UpdateEffectSelectionMove(int x)
+        {
+            App.UndoRedoManager.RestoreTransaction(false);
+
+            var channel = Song.Channels[editChannel];
+            var songEnd = Song.GetPatternStartAbsoluteNoteIndex(Song.Length);
+
+            var currentAbsoluteIdx = GetAbsoluteNoteIndexForPixelX(x - pianoSizeX);
+            var deltaAbsoluteIdx = currentAbsoluteIdx - captureMouseAbsoluteIdx;
+            var newCaptureIdx = captureNoteAbsoluteIdx + deltaAbsoluteIdx;
+            var delta =  SnapNote(newCaptureIdx) - captureNoteAbsoluteIdx;
+
+            // Don't allow snapping to send the selection opposite the mouse direction.
+            if (Math.Sign(deltaAbsoluteIdx) != Math.Sign(delta))
+                delta = 0;
+
+            if (dragEffects.Count > 0)
+            {
+                var first = dragEffects.Keys[0];
+                var last  = dragEffects.Keys[dragEffects.Count - 1];
+
+                delta = Utils.Clamp(delta, -first, songEnd - 1 - last);
+            }
+
+            ClearEffects(channel, dragEffects);
+            PlaceEffects(channel, dragEffects, delta);
+
+            selectedEffectIndices.Clear();
+
+            selectionMinX = int.MaxValue;
+            selectionMaxX = int.MinValue;
+
+            foreach (var kv in dragEffects)
+            {
+                var absoluteIdx = kv.Key + delta;
+
+                selectedEffectIndices.Add(absoluteIdx);
+
+                selectionMinX = Math.Min(selectionMinX, absoluteIdx);
+                selectionMaxX = Math.Max(selectionMaxX, absoluteIdx);
+            }
+
+            channel.InvalidateCumulativePatternCache(Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX), Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX));
+
+            MarkDirty();
         }
 
         void UpdateChangeEffectValue(int x, int y)
@@ -4891,6 +5141,9 @@ namespace FamiStudio
                     case CaptureOperation.ScrollBarY:
                         UpdateScrollBarY(x, y);
                         break;
+                    case CaptureOperation.EditEffectSelection:
+                        UpdateEditEffectSelection(x, y);
+                        break;
                     case CaptureOperation.MobilePan:
                         DoScroll(x - mouseLastX, y - mouseLastY);
                         break;
@@ -5040,10 +5293,14 @@ namespace FamiStudio
                     case CaptureOperation.ChangeEnvelopeValue:
                         UpdateChangeEnvelopeValue(x, y, true);
                         break;
+                    case CaptureOperation.Select:
+                        PostProcessSelection();
+                        break;
                     case CaptureOperation.DragLoop:
                     case CaptureOperation.DragRelease:
                     case CaptureOperation.ChangeEffectValue:
                     case CaptureOperation.ChangeSelectionEffectValue:
+                    case CaptureOperation.EditEffectSelection:
                     case CaptureOperation.ChangeEnvelopeRepeatValue:
                         App.UndoRedoManager.EndTransaction();
                         break;
@@ -5099,60 +5356,20 @@ namespace FamiStudio
             return selectedNoteIndices.Count > 0;
         }
 
+        private bool HasSelectionContent()
+        {
+            if (!IsSelectionValid())
+                return false;
+
+            if (!legacySelectMode && editMode == EditionMode.Channel)
+                return selectedNoteIndices.Count > 0 || selectedEffectIndices.Count > 0;
+
+            return true;
+        }
+
         private bool SelectionCoversMultiplePatterns()
         {
             return IsSelectionValid() && Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX) != Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX);
-        }
-
-        private void UpdateSelectedNotesFromEffects()
-        {
-            selectedNoteIndices.Clear();
-
-            if (legacySelectMode || selectedEffectIndices.Count == 0)
-                return;
-
-            var selectedNotes = new HashSet<int>();
-
-            var effectMin = selectedEffectIndices.Min();
-            var effectMax = selectedEffectIndices.Max();
-
-            // We need to check if the effect is over any part of a note body.
-            TransformNotes(0, effectMax, false, false, false, (note, idx) =>
-            {
-                if (note == null || !note.IsMusical)
-                    return note;
-
-                var noteAbsoluteIdx = idx;
-                var duration = GetVisualNoteDuration(noteAbsoluteIdx, note);
-                var noteEnd = noteAbsoluteIdx + duration;
-
-                foreach (var effectAbsoluteIdx in selectedEffectIndices)
-                {
-                    if (effectAbsoluteIdx >= noteAbsoluteIdx &&
-                        effectAbsoluteIdx < noteEnd)
-                    {
-                        selectedNotes.Add(noteAbsoluteIdx);
-                        break;
-                    }
-                }
-
-                return note;
-            });
-
-            var newSelectionMin = effectMin;
-            var newSelectionMax = effectMax;
-
-            if (selectedNotes.Count > 0)
-            {
-                newSelectionMin = Math.Min(newSelectionMin, selectedNotes.Min());
-                newSelectionMax = Math.Max(newSelectionMax, selectedNotes.Max());
-            }
-
-            selectionMinX = newSelectionMin;
-            selectionMaxX = newSelectionMax;
-
-            foreach (var absoluteIdx in selectedNotes)
-                selectedNoteIndices.Add(absoluteIdx - selectionMinX);
         }
 
         private void ClearEffects(Channel channel, SortedList<int, int> effects)
@@ -5524,22 +5741,34 @@ namespace FamiStudio
             {
                 if (note != null)
                 {
-                    if (deleteNotes && deleteEffectsMask == Note.EffectAllMask)
-                    {
-                        note.Clear(false);
-                    }
-                    else
-                    {
-                        if (deleteNotes)
-                            note.Clear(true);
+                    var absoluteIdx = selectionMinX + idx;
+                    var noteSelected = legacySelectMode || selectedNoteIndices.Contains(idx);
+                    var effectSelected = !legacySelectMode && selectedEffectIdx >= 0 && selectedEffectIndices.Contains(absoluteIdx);
 
-                        for (int i = 0; i < Note.EffectCount; i++)
+                    if (noteSelected)
+                    {
+                        if (deleteNotes && deleteEffectsMask == Note.EffectAllMask)
                         {
-                            if ((deleteEffectsMask & (1 << i)) != 0)
-                                note.ClearEffectValue(i);
+                            note.Clear(false);
+                        }
+                        else
+                        {
+                            if (deleteNotes)
+                                note.Clear(true);
+
+                            for (int i = 0; i < Note.EffectCount; i++)
+                            {
+                                if ((deleteEffectsMask & (1 << i)) != 0)
+                                    note.ClearEffectValue(i);
+                            }
                         }
                     }
+                    else if (effectSelected && (deleteEffectsMask & (1 << selectedEffectIdx)) != 0)
+                    {
+                        note.ClearEffectValue(selectedEffectIdx);
+                    }
                 }
+
                 return note;
             });
         }
@@ -5880,6 +6109,14 @@ namespace FamiStudio
                     MarkDirty();
                 }
             }
+            else if (IsActiveControl && Settings.PasteShortcut.Matches(e) && CanPaste)
+            {
+                Paste();
+            }
+            else if (IsActiveControl && Settings.PasteSpecialShortcut.Matches(e) && CanPaste)
+            {
+                PasteSpecial();
+            }
             else if (IsActiveControl && IsSelectionValid())
             {
                 if (Settings.CopyShortcut.Matches(e))
@@ -5889,14 +6126,6 @@ namespace FamiStudio
                 else if (Settings.CutShortcut.Matches(e))
                 {
                     Cut();
-                }
-                else if (Settings.PasteShortcut.Matches(e))
-                {
-                    Paste();
-                }
-                else if (Settings.PasteSpecialShortcut.Matches(e))
-                {
-                    PasteSpecial();
                 }
                 else if (Settings.DeleteShortcut.Matches(e))
                 {
@@ -7417,21 +7646,17 @@ namespace FamiStudio
 
                 SetMobileHighlightedNote(noteLocation.ToAbsoluteNoteIndex(Song));
 
-                var selection = IsHighlightedNoteSelected();
+                var selection = IsNoteSelected(noteLocation);
                 var menu = new List<ContextMenuOption>();
-                var opt  = new List<ContextMenuOption>();
-
-                if (IsNoteSelected(mouseLocation))
-                {
-                    opt.Add(new ContextMenuOption("MenuDeleteSelection", DeleteSelectedNotesContext, () => { DeleteSelectedNotes(); }));
-                }
 
                 if (note != null)
                 {
-                    menu.Insert(0, new ContextMenuOption("MenuDelete", DeleteNoteContext, () => { DeleteSingleNote(noteLocation, mouseLocation, note); }));
-
                     if (note.IsMusical)
                     {
+                        if (!legacySelectMode && selection)
+                            menu.Insert(0, new ContextMenuOption("MenuDeleteSelection", DeleteSelectedNotesContext, () => { DeleteSelectedNotes(); }));
+                        else
+                            menu.Insert(0, new ContextMenuOption("MenuDelete", DeleteNoteContext, () => { DeleteSingleNote(noteLocation, mouseLocation, note); }));
                         if (channel.SupportsNoAttackNotes)
                             menu.Add(new ContextMenuOption("MenuToggleAttack", selection ? ToggleSelectedNoteAttackContext : ToggleNoteAttackContext, () => { ToggleNoteAttack(noteLocation, note); }, ContextMenuSeparator.Before));
                         if (channel.SupportsSlideNotes)
@@ -7457,9 +7682,7 @@ namespace FamiStudio
                     }
 
                     if (HasSelectedNotes())
-                    {
                         menu.Add(new ContextMenuOption("MenuClearSelection", ClearSelectionContext, () => { ClearSelection(); ClearHighlightedNote(); }));
-                    }
 
                     // This only really serves a purpose in legacy select mode.
                     if (legacySelectMode)
@@ -7467,6 +7690,8 @@ namespace FamiStudio
                 }
                 else
                 {
+                    // We want to append these options to the end of the list, after the scales.
+                    var opt = new List<ContextMenuOption>();
                     note = channel.FindMusicalNoteAtLocation(ref noteLocation, -1);
 
                     // This only really serves a purpose in legacy select mode.
@@ -7508,6 +7733,10 @@ namespace FamiStudio
 
                     menu.Add(new ContextMenuOption(null, ScaleTypeContext, scaleOptions));
                     menu.Add(new ContextMenuOption(null, RootNoteContext, rootOptions, Platform.IsDesktop ? ContextMenuSeparator.After : ContextMenuSeparator.MobileAfter));
+
+                    if (legacySelectMode && selection)
+                        menu.Add(new ContextMenuOption("MenuDeleteSelection", DeleteSelectedNotesContext, () => { DeleteSelectedNotes(); }));
+                    
                     menu.AddRange(opt);
                 }
 
@@ -7577,6 +7806,7 @@ namespace FamiStudio
                 var note = channel.GetNoteAt(location);
                 var absIdx = location.ToAbsoluteNoteIndex(Song);
                 var hasValue = note != null && note.HasValidEffectValue(selectedEffectIdx);
+                var effectSelected = selectedEffectIndices.Contains(absIdx);
 
                 SetMobileHighlightedNote(absIdx);
 
@@ -7585,10 +7815,19 @@ namespace FamiStudio
                 if (hasValue)
                 {
                     menu.Add(new ContextMenuOption("Type", EnterEffectValueContext, () => { EnterEffectValue(x, y, location, note); }));
-                    menu.Add(new ContextMenuOption("MenuDelete", ClearEffectValueContext, () => { ClearEffectValue(location, false); }, ContextMenuSeparator.After));
+
+                    if (!effectSelected)
+                    {
+                        menu.Add(new ContextMenuOption("MenuDelete", ClearEffectValueContext, () => { ClearEffectValue(location, false); }, ContextMenuSeparator.After));
+                    }
                 }
 
-                if (IsNoteSelected(location))
+                if (!legacySelectMode && effectSelected)
+                {
+                    menu.Add(new ContextMenuOption("MenuDeleteSelection", ClearSelectEffectValuesContext, () => { ClearSelectedEffectValues(); }, ContextMenuSeparator.After));
+                }
+
+                if (legacySelectMode && IsNoteSelected(location))
                 {
                     menu.Add(new ContextMenuOption("MenuDeleteSelection", ClearSelectEffectValuesContext, () => { ClearEffectValue(location, true); }));
                     menu.Add(new ContextMenuOption("MenuDeleteSelection", DeleteSelectedNotesContext, () => { DeleteSelectedNotes(); }, ContextMenuSeparator.After));
@@ -8354,6 +8593,14 @@ namespace FamiStudio
                     captureSelectedNoteIndices.Add(selectionMinX + idx);
             }
 
+            captureSelectedEffectIndices.Clear();
+
+            if (!legacySelectMode && ModifierKeys.IsControlDown && editMode == EditionMode.Channel && captureSelectionFromEffectPanel)
+            {
+                foreach (var idx in selectedEffectIndices)
+                    captureSelectedEffectIndices.Add(idx);
+            }
+
             captureSelectedEnvelopeIndices.Clear();
 
             if (!legacySelectMode && ModifierKeys.IsControlDown && (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio))
@@ -8408,27 +8655,22 @@ namespace FamiStudio
                 var max = Math.Min(marqueeMaxX, EditEnvelope.Length - 1);
 
                 for (var i = min; i <= max; i++)
-                {
-                    if (ModifierKeys.IsControlDown)
-                    {
-                        if (!result.Add(i))
-                            result.Remove(i);
-                    }
-                    else
-                    {
-                        result.Add(i);
-                    }
-                }
+                    result.Add(i);
 
                 selectedEnvelopeIndices.Clear();
 
-                foreach (var idx in result)
-                    selectedEnvelopeIndices.Add(idx);
-
                 if (result.Count > 0)
                 {
-                    selectionMinX = result.Min();
-                    selectionMaxX = result.Max();
+                    selectionMinX = int.MaxValue;
+                    selectionMaxX = int.MinValue;
+
+                    foreach (var idx in result)
+                    {
+                        selectedEnvelopeIndices.Add(idx);
+
+                        selectionMinX = Math.Min(selectionMinX, idx);
+                        selectionMaxX = Math.Max(selectionMaxX, idx);
+                    }
                 }
                 else
                 {
@@ -8449,15 +8691,9 @@ namespace FamiStudio
 
             if (captureSelectionFromEffectPanel)
             {
-                selectionMinX = marqueeMinX;
-                selectionMaxX = marqueeMaxX;
-                selectionMinY = -1;
-                selectionMaxY = -1;
-
                 selectedNoteIndices.Clear();
-                selectedEffectIndices.Clear();
 
-                // Build selected frames based on selection.
+                var result = ModifierKeys.IsControlDown ? new HashSet<int>(captureSelectedEffectIndices) : new HashSet<int>();
                 var channel = Song.Channels[editChannel];
                 var minLocation = NoteLocation.FromAbsoluteNoteIndex(Song, marqueeMinX);
                 var maxLocation = NoteLocation.FromAbsoluteNoteIndex(Song, marqueeMaxX);
@@ -8467,13 +8703,33 @@ namespace FamiStudio
                     for (var it = channel.GetSparseNoteIterator(minLocation, maxLocation, Note.GetFilterForEffect(selectedEffectIdx)); !it.Done; it.Next())
                     {
                         if (it.Note.HasValidEffectValue(selectedEffectIdx))
-                        {
-                            selectedEffectIndices.Add(it.Location.ToAbsoluteNoteIndex(Song));
-                        }
+                            result.Add(it.Location.ToAbsoluteNoteIndex(Song));
                     }
                 }
 
-                UpdateSelectedNotesFromEffects();
+                selectedEffectIndices.Clear();
+
+                if (result.Count > 0)
+                {
+                    selectionMinX = int.MaxValue;
+                    selectionMaxX = int.MinValue;
+
+                    foreach (var idx in result)
+                    {
+                        selectedEffectIndices.Add(idx);
+
+                        selectionMinX = Math.Min(selectionMinX, idx);
+                        selectionMaxX = Math.Max(selectionMaxX, idx);
+                    }
+                }
+                else
+                {
+                    selectionMinX = marqueeMinX;
+                    selectionMaxX = marqueeMaxX;
+                }
+
+                selectionMinY = -1;
+                selectionMaxY = -1;
 
                 MarkDirty();
                 return;
@@ -8525,17 +8781,20 @@ namespace FamiStudio
                 var result = new HashSet<int>(captureSelectedNoteIndices);
 
                 foreach (var absoluteIdx in notesInMarquee)
-                {
-                    if (!result.Add(absoluteIdx))
-                        result.Remove(absoluteIdx);
-                }
+                    result.Add(absoluteIdx);
 
                 selectedNoteIndices.Clear();
 
                 if (result.Count > 0)
                 {
-                    selectionMinX = result.Min();
-                    selectionMaxX = result.Max();
+                    selectionMinX = int.MaxValue;
+                    selectionMaxX = int.MinValue;
+
+                    foreach (var absoluteIdx in result)
+                    {
+                        selectionMinX = Math.Min(selectionMinX, absoluteIdx);
+                        selectionMaxX = Math.Max(selectionMaxX, absoluteIdx);
+                    }
 
                     foreach (var absoluteIdx in result)
                         selectedNoteIndices.Add(absoluteIdx - selectionMinX);
@@ -8548,7 +8807,7 @@ namespace FamiStudio
                     foreach (var absoluteIdx in result)
                     {
                         var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
-                        var note     = channel.GetNoteAt(location);
+                        var note = channel.GetNoteAt(location);
 
                         if (note != null && note.IsMusical)
                         {
@@ -8559,10 +8818,10 @@ namespace FamiStudio
                 }
                 else
                 {
-                    selectionMinX = marqueeMinX;
-                    selectionMaxX = marqueeMaxX;
-                    selectionMinY = captureMarqueeMinY;
-                    selectionMaxY = captureMarqueeMaxY;
+                    selectionMinX = -1;
+                    selectionMaxX = -1;
+                    selectionMinY = -1;
+                    selectionMaxY = -1;
                 }
             }
             else
@@ -8572,8 +8831,11 @@ namespace FamiStudio
 
                 if (notesInMarquee.Count > 0)
                 {
-                    selectionMinX = Math.Min(selectionMinX, notesInMarquee.Min());
-                    selectionMaxX = Math.Max(selectionMaxX, notesInMarquee.Max());
+                    foreach (var absoluteIdx in notesInMarquee)
+                    {
+                        selectionMinX = Math.Min(selectionMinX, absoluteIdx);
+                        selectionMaxX = Math.Max(selectionMaxX, absoluteIdx);
+                    }
                 }
 
                 if (!captureSelectionFromHeader)
@@ -8590,6 +8852,50 @@ namespace FamiStudio
 
             UpdateSelectedEffectsFromNotes();
             MarkDirty();
+        }
+
+        private void PostProcessSelection()
+        {
+            // In modern selection, we need to trim any empty frames.
+            if (legacySelectMode || editMode != EditionMode.Channel)
+                return;
+
+            if (selectedNoteIndices.Count == 0 && selectedEffectIndices.Count == 0)
+            {
+                ClearSelection();
+                return;
+            }
+
+            var oldMinX = selectionMinX;
+            var minX = int.MaxValue;
+            var maxX = int.MinValue;
+
+            foreach (var idx in selectedNoteIndices)
+            {
+                var absoluteIdx = oldMinX + idx;
+                minX = Math.Min(minX, absoluteIdx);
+                maxX = Math.Max(maxX, absoluteIdx);
+            }
+
+            foreach (var idx in selectedEffectIndices)
+            {
+                minX = Math.Min(minX, idx);
+                maxX = Math.Max(maxX, idx);
+            }
+
+            if (minX != oldMinX)
+            {
+                var delta = oldMinX - minX;
+                var rebased = new HashSet<int>();
+
+                foreach (var idx in selectedNoteIndices)
+                    rebased.Add(idx + delta);
+
+                selectedNoteIndices = rebased;
+            }
+
+            selectionMinX = minX;
+            selectionMaxX = maxX;
         }
 
         private void UpdateSelectedEffectsFromNotes()
@@ -8851,6 +9157,64 @@ namespace FamiStudio
 
                 App.UndoRedoManager.EndTransaction();
             }
+        }
+
+        private void ClearSelectedEffectValues()
+        {
+            if (selectedEffectIndices.Count == 0)
+                return;
+
+            var channel = Song.Channels[editChannel];
+
+            var minPatternIdx = int.MaxValue;
+            var maxPatternIdx = int.MinValue;
+
+            foreach (var absoluteIdx in selectedEffectIndices)
+            {
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
+
+                minPatternIdx = Math.Min(minPatternIdx, location.PatternIndex);
+                maxPatternIdx = Math.Max(maxPatternIdx, location.PatternIndex);
+            }
+
+            if (minPatternIdx != maxPatternIdx)
+            {
+                App.UndoRedoManager.BeginTransaction(
+                    TransactionScope.Channel,
+                    Song.Id,
+                    editChannel);
+            }
+            else
+            {
+                var pattern = channel.PatternInstances[minPatternIdx];
+                App.UndoRedoManager.BeginTransaction(
+                    TransactionScope.Pattern,
+                    pattern.Id);
+            }
+
+            foreach (var absoluteIdx in selectedEffectIndices)
+            {
+                var location = NoteLocation.FromAbsoluteNoteIndex(Song, absoluteIdx);
+                var note = channel.GetNoteAt(location);
+
+                if (note != null)
+                    note.ClearEffectValue(selectedEffectIdx);
+            }
+
+            channel.InvalidateCumulativePatternCache(minPatternIdx, maxPatternIdx);
+
+            for (var i = minPatternIdx; i <= maxPatternIdx; i++)
+            {
+                var pattern = channel.PatternInstances[i];
+
+                if (pattern != null)
+                    PatternChanged?.Invoke(pattern);
+            }
+
+            App.UndoRedoManager.EndTransaction();
+
+            ClearSelection();
+            MarkDirty();
         }
 
         private void ToggleNoteAttack(NoteLocation location, Note note)
@@ -9506,12 +9870,15 @@ namespace FamiStudio
                         }
                     }
 
-                    if (IsSelectionValid())
+                    // We only display frames in modern select mode during selection, for means of measurement.
+                    if (legacySelectMode ? IsSelectionValid() : captureOperation == CaptureOperation.Select)
                     {
                         if (newNoteTooltip.Length > 0)
                             newNoteTooltip += " ";
 
-                        newNoteTooltip += $"{(selectionMaxX - selectionMinX + 1)}{(Song.Project.UsesFamiTrackerTempo ? " note" : " frame")}" + ((selectionMaxX - selectionMinX) == 0 ? "" : "s") + " selected";
+                        var numSelected = legacySelectMode ? selectionMaxX - selectionMinX + 1 : captureMarqueeMaxX - captureMarqueeMinX + 1;
+
+                        newNoteTooltip += $"{numSelected}{(Song.Project.UsesFamiTrackerTempo ? " note" : " frame")}" + (numSelected == 1 ? "" : "s") + " selected";
                     }
                 }
                 else if (editMode == EditionMode.Envelope || editMode == EditionMode.Arpeggio)
@@ -9522,7 +9889,9 @@ namespace FamiStudio
                     {
                         newNoteTooltip = $"{idx:D3} : {value}";
 
-                        if (IsSelectionValid())
+                        // We don't need these outside legacy select mode.
+                        // Frame count isn't useful with sparse selection.
+                        if (legacySelectMode && IsSelectionValid())
                         {
                             var numValuesSelected = selectionMaxX - selectionMinX + 1;
 
@@ -9538,7 +9907,6 @@ namespace FamiStudio
                                 default:
                                     newNoteTooltip += $" ({FramesSelectedTooltip.Format(numValuesSelected)})";
                                     break;
-
                             }
                         }
                     }
@@ -9705,6 +10073,10 @@ namespace FamiStudio
 
             if (channel.SupportsInstrument(App.SelectedInstrument, false))
             {
+                // We should clear any selection when making a new note.
+                if (!legacySelectMode)
+                    ClearSelection();
+
                 App.PlayInstrumentNote(noteValue, false, false);
                 StartCaptureOperation(e.X, e.Y, CaptureOperation.CreateNote, true);
                 UpdateNoteCreation(e.X, e.Y, true, false);

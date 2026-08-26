@@ -18,10 +18,12 @@ namespace FamiStudio
         LocalizedString EffectsToPasteLabel;
         LocalizedString RepeatLabel;
         LocalizedString RepeatTooltip;
+        LocalizedString PaddingLabel;
+        LocalizedString PaddingTooltip;
 
         #endregion
 
-        public unsafe PasteSpecialDialog(FamiStudioWindow win, Channel channel, bool mix = false, bool notes = true, int effectsMask = Note.EffectAllMask)
+        public unsafe PasteSpecialDialog(FamiStudioWindow win, Channel channel, bool mix = false, bool notes = true, int effectsMask = Note.EffectAllMask, bool padding = true)
         {
             Localization.Localize(this);
 
@@ -43,7 +45,9 @@ namespace FamiStudio
             dialog.Properties.AddLabelCheckBox(PasteNotesLabel.Colon, notes, 0, PasteNotesTooltip); // 1
             dialog.Properties.AddCheckBoxList(EffectsToPasteLabel.Colon, effectList.ToArray(), checkedList.ToArray(), "Select the effects to paste."); // 2
             dialog.Properties.AddNumericUpDown(RepeatLabel.Colon, 1, 1, 32, 1, RepeatTooltip); // 5
+            dialog.Properties.AddNumericUpDown(PaddingLabel.Colon, 0, 0, 255, 1, PaddingTooltip); // 6
             dialog.Properties.Build();
+            dialog.Properties.SetPropertyEnabled(dialog.Properties.PropertyCount - 1, padding);
         }
 
         public void ShowDialogAsync(Action<DialogResult> callback)
@@ -70,6 +74,7 @@ namespace FamiStudio
             }
         }
 
-        public int PasteRepeat => dialog.Properties.GetPropertyValue<int>(dialog.Properties.PropertyCount - 1);
+        public int PasteRepeat => dialog.Properties.GetPropertyValue<int>(dialog.Properties.PropertyCount - 2);
+        public int Padding     => dialog.Properties.GetPropertyValue<int>(dialog.Properties.PropertyCount - 1);
     }
 }

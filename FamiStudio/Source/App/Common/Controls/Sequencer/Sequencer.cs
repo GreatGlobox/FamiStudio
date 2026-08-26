@@ -1035,32 +1035,27 @@ namespace FamiStudio
                         if (pattern != null)
                         {
                             var bmp = patternCache.GetOrAddPattern(pattern, patternLen, noteLen, out var u0, out var v0, out var u1, out var v1);
+                            var isSelected = IsPatternSelected(location);
+                            var newSelection = isSelected && !legacySelectMode;
 
                             c.PushTranslation(0, py);
                             c.FillRectangleGradient(1, 1, sx, patternHeaderSizeY, pattern.Color, pattern.Color.Scaled(0.8f), true, patternHeaderSizeY);
                             c.FillRectangle(1, patternHeaderSizeY, sx, channelSizeY, Color.FromArgb(75, pattern.Color));
-                            c.DrawLine(0, patternHeaderSizeY, sx, patternHeaderSizeY, Theme.BlackColor);
+                            c.DrawLine(0, patternHeaderSizeY, sx, patternHeaderSizeY, newSelection ? Theme.WhiteColor : Theme.BlackColor);
                             c.DrawTexture(bmp, 1.0f, 1.0f + patternHeaderSizeY, sx - 1, patternCacheSizeY, u0, v0, u1, v1);
 
-                            var isSelected = IsPatternSelected(location);
                             if (isSelected)
                             {
                                 if (!legacySelectMode)
                                 {
-                                    c.FillRectangle(0, 0, sx, channelSizeY, highlightedPatternColor);
                                     c.DrawText(pattern.Name, Fonts.FontSmallBold, patternNamePosX + 1, 1, Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - patternNamePosX, patternHeaderSizeY + 1);
-                                    f.DrawLine(0, patternHeaderSizeY, sx, patternHeaderSizeY, Theme.WhiteColor, 3, true, true);
-                                    f.DrawRectangle(0, 0, sx, channelSizeY, Theme.WhiteColor, 3, true, true);
+                                    f.FillRectangle(1, patternHeaderSizeY, sx, channelSizeY, highlightedPatternColor);
                                 }
-                                else
-                                {
-                                    f.DrawRectangle(0, 0, sx, channelSizeY, Theme.LightGreyColor1, 3, true, true);
-                                }
+                                    
+                                f.DrawRectangle(0, 0, sx, channelSizeY, legacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor, 3, true, true);
                             }
 
-                            var modernSelection = isSelected && !legacySelectMode;
-
-                            c.DrawText(pattern.Name, modernSelection ? Fonts.FontSmallBold : Fonts.FontSmall, patternNamePosX, 0, modernSelection ? Theme.WhiteColor : Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - patternNamePosX, patternHeaderSizeY + 1);
+                            c.DrawText(pattern.Name, newSelection ? Fonts.FontSmallBold : Fonts.FontSmall, patternNamePosX, 0, newSelection ? Theme.WhiteColor : Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - patternNamePosX, patternHeaderSizeY + 1);
                             c.PopTransform();
 
                             if (!dragCapture && valid && patternRefCounts.TryGetValue(pattern, out var count) && count > 1)
@@ -3242,26 +3237,14 @@ namespace FamiStudio
 
             var result = ModifierKeys.IsControlDown ? new HashSet<PatternLocation>(captureSelectedPatternLocations) : new HashSet<PatternLocation>();
 
-            result.RemoveWhere(location => Song.GetPatternInstance(location) == null);
-
             for (var channel = marqueeMinChannel; channel <= marqueeMaxChannel; channel++)
             {
                 for (var pattern = marqueeMinPattern; pattern <= marqueeMaxPattern; pattern++)
                 {
                     var location = new PatternLocation(channel, pattern);
 
-                    if (Song.GetPatternInstance(location) == null)
-                        continue;
-
-                    if (ModifierKeys.IsControlDown)
-                    {
-                        if (!result.Add(location))
-                            result.Remove(location);
-                    }
-                    else
-                    {
+                    if (Song.GetPatternInstance(location) != null)
                         result.Add(location);
-                    }
                 }
             }
 
