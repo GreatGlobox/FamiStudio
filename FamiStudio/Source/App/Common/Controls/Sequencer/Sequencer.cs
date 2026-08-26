@@ -388,8 +388,11 @@ namespace FamiStudio
                 // Scrollable and resizeable behaviour.
                 channelSizeY = Utils.RoundUp(42, divider);
 
-                var sequencerHeight = sequencerHeightOverride >= 0 ? sequencerHeightOverride : Settings.SequencerHeight > 0 ? (int)Math.Round(Settings.SequencerHeight / DpiScaling.Window) - constantSize : idealSequencerHeight;
-                sequencerHeight = Utils.Clamp(sequencerHeight, 100, (int)Math.Round(ParentWindow.Height / DpiScaling.Window * 0.8f));
+                var minHeight = 100 - constantSize;
+                var maxHeight = (int)Math.Round(ParentWindow.Height / DpiScaling.Window * 0.9f) - constantSize;
+                
+                var sequencerHeight = sequencerHeightOverride >= 0 ? sequencerHeightOverride : Settings.SequencerHeight > 0 ? (int)Math.Round( Settings.SequencerHeight / DpiScaling.Window) - constantSize : idealSequencerHeight;
+                sequencerHeight = Utils.Clamp(sequencerHeight, minHeight, maxHeight);
 
                 var actualSequencerHeight = channelSizeY * visibleChannelCount;
                 verticalScoll = actualSequencerHeight > sequencerHeight;
@@ -2074,6 +2077,9 @@ namespace FamiStudio
 
         private void StartRectangleSelection(int x, int y)
         {
+            captureSelectionMin = PatternLocation.Invalid;
+            captureSelectionMax = PatternLocation.Invalid;
+
             captureSelectedPatternLocations.Clear();
 
             foreach (var location in selectedPatternLocations)
@@ -3341,17 +3347,20 @@ namespace FamiStudio
         private void UpdateSequencerResize(int y)
         {
             var newHeight = captureSequencerHeight + (y - captureMouseY);
-            var minHeight = DpiScaling.ScaleForWindow(142);
-            var maxHeight = (int)Math.Round(ParentWindow.Height * 0.8f);
+            var minHeight = DpiScaling.ScaleForWindow(100);
+            var maxHeight = (int)Math.Round(ParentWindow.Height * 0.9f);
 
             newHeight = Utils.Clamp(newHeight, minHeight, maxHeight);
 
             var scrollBarSize = Settings.ScrollBars == 1 ? DefaultScrollBarThickness1 : Settings.ScrollBars == 2 ? DefaultScrollBarThickness2 : 0;
             var constantSize  = DpiScaling.ScaleForWindow(DefaultHeaderSizeY + scrollBarSize + 1);
+            var prevHeight    = sequencerHeightOverride;
 
             sequencerHeightOverride = (int)Math.Round((newHeight - constantSize) / DpiScaling.Window);
 
-            ParentTopContainer.UpdateLayout();
+            // Don't spam layout updates if we haven't resized.
+            if (sequencerHeightOverride != prevHeight)
+                ParentTopContainer.UpdateLayout();
         }
 
         private void UpdateAltZoom(int x, int y)
