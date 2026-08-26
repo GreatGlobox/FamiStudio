@@ -4523,14 +4523,6 @@ namespace FamiStudio
             if (Math.Sign(deltaAbsoluteIdx) != Math.Sign(delta))
                 delta = 0;
 
-            if (dragEffects.Count > 0)
-            {
-                var first = dragEffects.Keys[0];
-                var last  = dragEffects.Keys[dragEffects.Count - 1];
-
-                delta = Utils.Clamp(delta, -first, songEnd - 1 - last);
-            }
-
             ClearEffects(channel, dragEffects);
             PlaceEffects(channel, dragEffects, delta);
 
@@ -4542,6 +4534,8 @@ namespace FamiStudio
             foreach (var kv in dragEffects)
             {
                 var absoluteIdx = kv.Key + delta;
+                if (absoluteIdx < 0 || absoluteIdx >= songEnd)
+                    continue;
 
                 selectedEffectIndices.Add(absoluteIdx);
 
@@ -4549,7 +4543,16 @@ namespace FamiStudio
                 selectionMaxX = Math.Max(selectionMaxX, absoluteIdx);
             }
 
-            channel.InvalidateCumulativePatternCache(Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX), Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX));
+            if (selectedEffectIndices.Count == 0)
+            {
+                ClearSelection();
+            }
+            else
+            {
+                channel.InvalidateCumulativePatternCache(
+                    Song.PatternIndexFromAbsoluteNoteIndex(selectionMinX),
+                    Song.PatternIndexFromAbsoluteNoteIndex(selectionMaxX));
+            }
 
             MarkDirty();
         }
@@ -5383,9 +5386,14 @@ namespace FamiStudio
 
         private void PlaceEffects(Channel channel, SortedList<int, int> effects, int amount)
         {
+            var songEnd = Song.GetPatternStartAbsoluteNoteIndex(Song.Length);
+
             foreach (var kv in effects)
             {
-                var frame    = kv.Key + amount;
+                var frame = kv.Key + amount;
+                if (frame < 0 || frame >= songEnd)
+                    continue;
+
                 var location = NoteLocation.FromAbsoluteNoteIndex(Song, frame);
                 var pattern  = channel.PatternInstances[location.PatternIndex];
 
@@ -9326,14 +9334,37 @@ namespace FamiStudio
 
         private void SelectAll()
         {
-            if (editMode == EditionMode.Arpeggio ||
-                editMode == EditionMode.Envelope)
+            if (editMode == EditionMode.Arpeggio || editMode == EditionMode.Envelope)
             {
                 SetSelection(0, EditEnvelope.Length - 1);
             }
             else if (editMode == EditionMode.Channel)
             {
-                SetSelection(0, Song.GetPatternStartAbsoluteNoteIndex(Song.Length));
+                if (legacySelectMode)
+                {
+                    SetSelection(0, Song.GetPatternStartAbsoluteNoteIndex(Song.Length));
+                }
+                else
+                {
+                    var songEnd = Song.GetPatternStartAbsoluteNoteIndex(Song.Length) - 1;
+
+                    selectionMinX = 0;
+                    selectionMaxX = songEnd;
+
+                    selectedNoteIndices.Clear();
+                    selectedEffectIndices.Clear();
+
+                    TransformNotes(0, songEnd, false, false, false, (note, idx) =>
+                    {
+                        if (note != null && note.IsMusicalOrStop)
+                            selectedNoteIndices.Add(idx);
+
+                        return note;
+                    });
+
+                    PostProcessSelection();
+                    UpdateSelectedEffectsFromNotes();
+                }
             }
 
             MarkDirty();
