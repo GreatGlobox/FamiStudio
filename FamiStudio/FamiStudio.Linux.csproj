@@ -168,6 +168,7 @@
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\RegisterViewerPanel.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\SimpleTab.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\ProjectExplorer.cs" />
+    <Compile Include="Source\App\Common\Controls\Sequencer\ChannelRow.cs" />
     <Compile Include="Source\App\Common\Controls\Sequencer\Sequencer.cs" />
     <Compile Include="Source\App\Common\Controls\Toolbar\Oscilloscope.cs" />
     <Compile Include="Source\App\Common\Controls\Toolbar\Timecode.cs" />

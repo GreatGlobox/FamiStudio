@@ -35,6 +35,8 @@ namespace FamiStudio
         const float MinZoom = 0.25f;
         const float MaxZoom = 16.0f;
 
+        private ChannelRow[] channelRows;
+
         int channelNameSizeX;
         int headerSizeY;
         int channelSizeY;
@@ -71,7 +73,6 @@ namespace FamiStudio
         int capturePatternIdx = -1;
         int dragSeekPosition = -1;
         int selectionDragAnchorPatternIdx = -1;
-        int lastChanIdx = -1;
         int sequencerHeightOverride = -1;
         float zoom = DefaultZoom;
         float bitmapScale = 1.0f;
@@ -115,9 +116,6 @@ namespace FamiStudio
         Color highlightedPatternColor       = Color.FromArgb(64, Theme.WhiteColor);
 
         float[] seekGeometry;
-        TextureAtlasRef[] bmpExpansions;
-        TextureAtlasRef[] bmpChannels;
-        TextureAtlasRef bmpForceDisplay;
         TextureAtlasRef bmpLoopPoint;
         TextureAtlasRef bmpInstantiate;
         TextureAtlasRef bmpDuplicate;
@@ -419,8 +417,62 @@ namespace FamiStudio
         {
             UpdateRenderCoords();
             ClampScroll();
+            UpdateChannelRowLayout();
             InvalidatePatternCache();
             MarkDirty();
+        }
+
+        private void RecreateChannelRows()
+        {
+            if (Song == null)
+                return;
+
+            if (channelRows != null)
+            {
+                foreach (var row in channelRows)
+                    RemoveControl(row);
+            }
+
+            channelRows = new ChannelRow[Song.Channels.Length];
+
+            for (var i = 0; i < channelRows.Length; i++)
+            {
+                var row = new ChannelRow(i);
+
+                row.MuteClicked             += ChannelRow_IconClicked;
+                row.SoloToggled             += ChannelRow_SoloToggled;
+                row.ForceDisplayClicked     += ChannelRow_ForceDisplayClicked;
+                row.ForceDisplaySoloToggled += ChannelRow_ForceDisplaySoloToggled;
+
+                row.ShowExpansionIcons = showExpansionIcons;
+                row.IconScale = channelBitmapScale;
+
+                channelRows[i] = row;
+                AddControl(row);
+            }
+
+            UpdateChannelRowLayout();
+        }
+
+        private void UpdateChannelRowLayout()
+        {
+            if (Song == null || channelRows == null || channelToRow == null)
+                return;
+
+            for (var i = 0; i < channelRows.Length; i++)
+            {
+                var row = channelRows[i];
+                var rowIdx = channelToRow[i];
+                if (rowIdx < 0)
+                {
+                    row.Visible = false;
+                    continue;
+                }
+
+                row.Visible = true;
+                row.Move(0, headerSizeY + rowIdx * channelSizeY - scrollY);
+                row.Resize(channelNameSizeX, channelSizeY);
+            }
         }
 
         public void Reset()
@@ -430,6 +482,7 @@ namespace FamiStudio
             zoom = DefaultZoom;
             ClearSelection();
             UpdateRenderCoords();
+            RecreateChannelRows();
             InvalidatePatternCache();
         }
 
@@ -481,6 +534,7 @@ namespace FamiStudio
         {
             hideEmptyChannels = hide;
             RebuildChannelMap();
+            UpdateChannelRowLayout();
             MarkDirty();
         }
 
@@ -590,12 +644,11 @@ namespace FamiStudio
         protected override void OnAddedToContainer()
         {
             UpdateRenderCoords();
+            RecreateChannelRows();
+            UpdateChannelRowLayout();
 
             var g = ParentWindow.Graphics;
             patternCache = new PatternBitmapCache(g);
-            bmpExpansions = g.GetTextureAtlasRefs(ExpansionType.Icons);
-            bmpChannels = g.GetTextureAtlasRefs(ChannelType.Icons);
-            bmpForceDisplay = g.GetTextureAtlasRef("GhostSmall");
             bmpLoopPoint = g.GetTextureAtlasRef("LoopSmallFill");
             bmpInstantiate = g.GetTextureAtlasRef("Instance");
             bmpDuplicate = g.GetTextureAtlasRef("MenuCopy"); // TODO: These should probably not be menu versions + duplicatemove needs updating. If changed, fix scaling on mobile versions.
@@ -623,6 +676,7 @@ namespace FamiStudio
         {
             UpdateRenderCoords();
             ClampScroll();
+            UpdateChannelRowLayout();
         }
 
         protected bool IsSelectionValid()
@@ -696,80 +750,31 @@ namespace FamiStudio
             }
         }
 
-        protected void RenderChannelNames(Graphics g)
+        protected void RenderChannelNameArea(Graphics g)
         {
             var c = g.DefaultCommandList;
 
-            // Track name background
+            // Background for header.
             c.FillRectangle(0, 0, channelNameSizeX, height, Theme.DarkGreyColor2);
+
+            // Outer/right boundaries.
             c.DrawLine(channelNameSizeX - 1, 0, channelNameSizeX - 1, height, Theme.BlackColor);
             c.DrawLine(0, 0, channelNameSizeX, 0, Theme.BlackColor);
             c.DrawLine(0, height - scrollBarThickness, channelNameSizeX, height - scrollBarThickness, Theme.BlackColor);
             c.DrawLine(0, height - 1, channelNameSizeX, height - 1, Theme.BlackColor);
+
+            // Header boundary.
             c.DrawLine(0, headerSizeY, channelNameSizeX, headerSizeY, Theme.BlackColor);
 
-            // Shy
+            // Shy button.
             c.DrawTextureAtlasCentered(hideEmptyChannels && !forceShyOff ? bmpShyOn : bmpShyOff, GetShyButtonRect(), bitmapScale, hoverShy ? Theme.LightGreyColor1 : Theme.LightGreyColor2);
 
-            // Vertical line seperating with the toolbar
             if (Platform.IsMobile && IsLandscape)
                 c.DrawLine(0, 0, 0, height, Theme.BlackColor);
 
-            // Scrollable area.
-            c.PushClipRegion(0, headerSizeY + 1, channelNameSizeX, height - scrollBarThickness - headerSizeY - 1);
-            c.FillClipRegion(Theme.DarkGreyColor2);
-            c.DrawLine(channelNameSizeX - 1, 0, channelNameSizeX - 1, height, Theme.BlackColor);
-            c.DrawLine(0, height - 1, channelNameSizeX, height - 1, Theme.BlackColor);
-            c.PushTranslation(0, headerSizeY - scrollY);
-
-            // Horizontal lines seperating patterns.
-            for (int i = 0, y = 0; i <= rowToChannel.Length; i++, y += channelSizeY)
-                c.DrawLine(0, y, channelNameSizeX, y, Theme.BlackColor);
-
-            var showExpIcons = showExpansionIcons && Song.Project.UsesAnyExpansionAudio;
-            var atlas = showExpIcons ? bmpExpansions : bmpChannels;
-            var selectedChannelIndex = App.SelectedChannelIndex;
-            var selectedInstrument   = App.SelectedInstrument;
-
-            for (int i = 0, y = 0; i < Song.Channels.Length; i++)
-            {
-                if (channelVisible[i])
-                {
-                    // Dim unsupported channels if enabled in settings
-                    var dim = Settings.DimUnsupportedChannels && !Song.Channels[i].SupportsInstrument(selectedInstrument, false);
-
-                    // Icon
-                    var isHoverRow = captureOperation != CaptureOperation.ResizeSequencer && hoverRow == channelToRow[i];
-                    var channel = Song.Channels[i];
-                    var bitmapIndex = showExpIcons ? channel.Expansion : channel.Type;
-                    var iconHoverOpacity = isHoverRow && (hoverIconMask & 1) != 0 ? 192 : 255;
-                    var iconFinalOpacity = Utils.ColorMultiply((App.ChannelMask & (1L << i)) != 0 ? 255 : 50, iconHoverOpacity);
-                    c.DrawTextureAtlas(atlas[bitmapIndex], channelIconPosX, y + channelIconPosY, channelBitmapScale, Theme.LightGreyColor1.Transparent(iconFinalOpacity));
-
-                    // Name
-                    var font = i == selectedChannelIndex ? Fonts.FontMediumBold : Fonts.FontMedium;
-                    var iconHeight = bmpChannels[0].ElementSize.Height * channelBitmapScale;
-                    c.DrawText(Song.Channels[i].LocalizedName, font, channelNamePosX, y + channelIconPosY, Theme.LightGreyColor2.Transparent(dim ? 80 : 255), TextFlags.MiddleLeft, 0, iconHeight);
-
-                    // Force display icon.
-                    var ghostHoverOpacity = isHoverRow && (hoverIconMask & 2) != 0 ? 192 : 255;
-                    var ghostFinalOpacity = Utils.ColorMultiply((App.ForceDisplayChannelMask & (1L << i)) != 0 ? 255 : 50, ghostHoverOpacity);
-                    c.DrawTextureAtlasCentered(bmpForceDisplay, GetRowGhostRect(channelToRow[i]).Offsetted(0, -headerSizeY + scrollY), channelBitmapScale, Theme.LightGreyColor1.Transparent(ghostFinalOpacity));
-
-                    // Hover
-                    if (isHoverRow)
-                        c.FillRectangle(0, y, channelNameSizeX, y + channelSizeY, Theme.MediumGreyColor1.Transparent(dim ? 192 : 255));
-
-                    // Darken unsupported channel backgrounds
-                    if (dim)
-                        c.FillRectangle(0, y, channelNameSizeX, y + channelSizeY, Theme.BlackColor.Transparent(80));
-
-                    y += channelSizeY;
-                }
-            }
-
-            c.PopTransform();
-            c.PopClipRegion();
+            // Bottom line for channel names.
+            var bottomY = headerSizeY + rowToChannel.Length * channelSizeY - scrollY;
+            c.DrawLine(0, bottomY, channelNameSizeX, bottomY, Theme.BlackColor);
         }
 
         protected void RenderPatternArea(Graphics g)
@@ -1154,9 +1159,11 @@ namespace FamiStudio
             if (height <= 1)
                 return;
 
-            RenderChannelNames(g);
+            RenderChannelNameArea(g);
             RenderPatternArea(g);
             RenderDebug(g);
+
+            base.OnRender(g);
         }
 
         private void ReplaceSelectionUtil(Point pos, bool forceInSelection, Func<Channel, bool> channelValid, Action<Pattern> action)
@@ -1494,6 +1501,28 @@ namespace FamiStudio
             MarkDirty();
         }
 
+        private void ChannelRow_IconClicked(int channelIdx)
+        {
+            App.ToggleChannelActive(channelIdx);
+        }
+
+        private void ChannelRow_SoloToggled(int channelIdx)
+        {
+            App.ToggleChannelSolo(channelIdx, true);
+            MarkDirty();
+        }
+
+        private void ChannelRow_ForceDisplayClicked(int channelIdx)
+        {
+            App.ToggleChannelForceDisplay(channelIdx);
+        }
+
+        private void ChannelRow_ForceDisplaySoloToggled(int channelIdx)
+        {
+            App.ToggleChannelForceDisplayAll(channelIdx, true);
+            MarkDirty();
+        }
+
         private bool HandleMouseDownPan(PointerEventArgs e)
         {
             bool middle = e.Middle || (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle);
@@ -1562,8 +1591,6 @@ namespace FamiStudio
             if (e.Left && IsMouseInTrackName(e.X, e.Y))
             { 
                 var chanIdx = GetChannelIndexFromIconPos(e.X, e.Y);
-                lastChanIdx = chanIdx;
-
                 if (chanIdx >= 0)
                 {
                     App.ToggleChannelActive(chanIdx);
@@ -1928,18 +1955,12 @@ namespace FamiStudio
 
         private bool HandleTouchClickChannelName(int x, int y, bool doubleClick = false)
         {
-            // HACK: Since the sequencer doesn't use real buttons, we keep the last tapped channel index.
-            // This prevents an issue on mobile, where tapping two icons that are close together sends
-            // a double tap, toggling solo channel. Note: Usually only doable with small channel Y size.
             if (IsMouseInTrackName(x, y))
             {
                 var chanIdx = GetChannelIndexFromIconPos(x, y);
-                var canToggleSolo = lastChanIdx == chanIdx;
-                lastChanIdx = chanIdx;
-
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick && canToggleSolo)
+                    if (doubleClick)
                     {
                         App.ToggleChannelSolo(chanIdx, true);
                     }
@@ -1953,7 +1974,7 @@ namespace FamiStudio
                 chanIdx = GetChannelIndexFromGhostIconPos(x, y);
                 if (chanIdx >= 0)
                 {
-                    if (doubleClick && canToggleSolo)
+                    if (doubleClick)
                     { 
                         App.ToggleChannelForceDisplayAll(chanIdx, true);
                     }

@@ -2538,6 +2538,25 @@ namespace FamiStudio
                     }
                 }
 
+                if (!legacySelectMode && pasteNotes && !mix)
+                {
+                    var channel = Song.Channels[editChannel];
+                    var songEnd = Song.GetPatternStartAbsoluteNoteIndex(Song.Length);
+
+                    for (var j = 0; j < notes.Length; j++)
+                    {
+                        var note = notes[j];
+                        if (note == null || !note.IsMusical)
+                            continue;
+
+                        var noteStart = start + j;
+                        var noteEnd = Math.Min(noteStart + note.Duration, songEnd);
+
+                        if (noteEnd > noteStart + 1)
+                            channel.DeleteNotesBetween(noteStart + 1, noteEnd, true);
+                    }
+                }
+
                 ReplaceNotes(notes, start, false, pasteNotes && clipboardHasNotes, pasteFxMask, mix);
 
                 if (i != repeat - 1)
@@ -2882,8 +2901,16 @@ namespace FamiStudio
 
         private void DrawSelectionRect(CommandList c, int height, bool effectsPanel = false, bool header = false)
         {
-            if (!IsSelectionValid() || (captureOperation != CaptureOperation.Select && !legacySelectMode))
-                return;
+            if (legacySelectMode)
+            {
+                if (!IsSelectionValid())
+                    return;
+            }
+            else
+            {
+                if (captureOperation != CaptureOperation.Select || captureMarqueeMinX < 0 || captureMarqueeMaxX < 0)
+                    return;
+            }
 
             var color = IsActiveControl ? selectionBgVisibleColor : selectionBgInvisibleColor;
 
