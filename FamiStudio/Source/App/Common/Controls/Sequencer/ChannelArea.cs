@@ -1,0 +1,399 @@
+using System;
+
+namespace FamiStudio
+{
+    internal class ChannelArea : Container
+    {
+        private readonly Sequencer sequencer;
+        private ChannelRowsContainer rowsContainer;
+        private ChannelRow[] rows;
+        private Button shyButton;
+        private bool hideEmptyChannels;
+        private bool forceShyOff;
+        private float headerIconScale = 1.0f;
+        private int[] channelToRow;
+        private int bottomY;
+        private int lastScrollY;
+
+        private Song Song => App.SelectedSong;
+
+        internal bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
+
+        public bool HideEmptyChannels
+        {
+            get => hideEmptyChannels;
+            set
+            {
+                if (hideEmptyChannels != value)
+                {
+                    hideEmptyChannels = value;
+                    MarkDirty();
+                }
+            }
+        }
+
+        public bool ForceShyOff
+        {
+            get => forceShyOff;
+            set
+            {
+                if (forceShyOff != value)
+                {
+                    forceShyOff = value;
+                    MarkDirty();
+                }
+            }
+        }
+
+        public float HeaderIconScale
+        {
+            get => headerIconScale;
+            set
+            {
+                headerIconScale = value;
+
+                if (shyButton != null)
+                    shyButton.ImageScale = value;
+            }
+        }
+
+        public event Action ShyClicked;
+
+        internal ChannelArea(Sequencer sequencer)
+        {
+            this.sequencer = sequencer;
+        }
+
+        protected override void OnAddedToContainer()
+        {
+            rowsContainer = new ChannelRowsContainer();
+
+            shyButton = new Button("ShyOff")
+            {
+                Transparent = true,
+                ImageScale = headerIconScale
+            };
+
+            shyButton.ImageEvent += ShyButton_ImageEvent;
+            shyButton.Click += (s) => ShyClicked?.Invoke();
+
+            AddControl(rowsContainer);
+            AddControl(shyButton);
+        }
+
+        private string ShyButton_ImageEvent(Control sender, ref Color tint)
+        {
+            tint = Theme.LightGreyColor2;
+            return hideEmptyChannels && !forceShyOff ? "ShyOn" : "ShyOff";
+        }
+
+        public void RecreateRows(float iconScale)
+        {
+            if (rows != null)
+            {
+                foreach (var row in rows)
+                    rowsContainer.RemoveControl(row);
+            }
+
+            rows = new ChannelRow[Song.Channels.Length];
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var row = new ChannelRow(this, i);
+
+                row.IconClicked += App.ToggleChannelActive;
+                row.SoloToggled += (idx) =>
+                {
+                    App.ToggleChannelSolo(idx, true);
+                    MarkDirty();
+                };
+
+                row.ForceDisplayClicked += App.ToggleChannelForceDisplay;
+                row.ForceDisplaySoloToggled += (idx) =>
+                {
+                    App.ToggleChannelForceDisplayAll(idx, true);
+                    MarkDirty();
+                };
+
+                row.IconScale = iconScale;
+
+                rows[i] = row;
+                rowsContainer.AddControl(row);
+            }
+        }
+
+        public void UpdateLayout(int[] channelToRow)
+        {
+            this.channelToRow = channelToRow;
+
+            rowsContainer.Move(0, sequencer.HeaderSizeY);
+            rowsContainer.Resize(Width, sequencer.ContentBottomY - sequencer.HeaderSizeY);
+
+            shyButton.Move(Width - sequencer.HeaderSizeY, 0);
+            shyButton.Resize(sequencer.HeaderSizeY, sequencer.HeaderSizeY);
+
+            if (rows == null || channelToRow == null)
+                return;
+
+            var maxRow = -1;
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var row = rows[i];
+                var rowIdx = channelToRow[i];
+
+                if (rowIdx < 0)
+                {
+                    row.Visible = false;
+                    continue;
+                }
+
+                maxRow = Math.Max(maxRow, rowIdx);
+
+                row.Visible = true;
+                row.Resize(Width, sequencer.ChannelSizeY);
+            }
+
+            bottomY = sequencer.HeaderSizeY + (maxRow + 1) * sequencer.ChannelSizeY;
+
+            UpdateRowPositions();
+        }
+
+        private void UpdateRowPositions()
+        {
+            if (rows == null || channelToRow == null)
+                return;
+
+            lastScrollY = sequencer.ViewScrollY;
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var rowIdx = channelToRow[i];
+                if (rowIdx >= 0)
+                    rows[i].Move(0, rowIdx * sequencer.ChannelSizeY - sequencer.ViewScrollY);
+            }
+
+            rowsContainer.BottomY = bottomY - sequencer.HeaderSizeY - sequencer.ViewScrollY;
+        }
+
+        private void ConditionalUpdateRowScroll()
+        {
+            if (lastScrollY != sequencer.ViewScrollY)
+                UpdateRowPositions();
+        }
+
+        public void SetHover(int[] channelToRow, int hoverRow)
+        {
+            if (rows == null || channelToRow == null)
+                return;
+
+            for (var i = 0; i < rows.Length; i++)
+                rows[i].Hovered = channelToRow[i] == hoverRow;
+        }
+
+        protected override void OnRender(Graphics g)
+        {
+            ConditionalUpdateRowScroll();
+
+            var c = g.DefaultCommandList;
+
+            c.FillRectangle(0, 0, Width, Height, Theme.DarkGreyColor2);
+
+            base.OnRender(g);
+
+            c.DrawLine(Width - 1, 0, Width - 1, Height, Theme.BlackColor);
+            c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
+            c.DrawLine(0, sequencer.HeaderSizeY, Width, sequencer.HeaderSizeY, Theme.BlackColor);
+
+            // Bottom of the visible channel-row viewport.
+            var y = rowsContainer.Top + rowsContainer.Height - 1;
+            c.DrawLine(0, y, Width, y, Theme.BlackColor);
+
+            if (Platform.IsMobile && IsLandscape)
+                c.DrawLine(0, 0, 0, Height, Theme.BlackColor);
+        }
+
+        private class ChannelRow : Container
+        {
+            const int DefaultChannelIconPosX     = 2;
+            const int DefaultChannelIconPosY     = 3;
+            const int DefaultChannelNamePosX     = 21;
+            const int DefaultGhostNoteOffsetX    = 16;
+            const int DefaultGhostNoteOffsetY    = Platform.IsMobile ? 16 : 15;
+            
+            private ChannelArea channelArea;
+            private Button channelButton;
+            private Button forceDisplayButton;
+            private bool hovered;
+            private float iconScale = 1.0f;
+
+            public delegate void ChannelDelegate(int channelIdx);
+
+            public ChannelDelegate IconClicked;
+            public ChannelDelegate SoloToggled;
+            public ChannelDelegate ForceDisplayClicked;
+            public ChannelDelegate ForceDisplaySoloToggled;
+
+            public int ChannelIndex { get; private set; }
+            public bool Hovered
+            {
+                get => hovered;
+                set
+                {
+                    if (hovered != value)
+                    {
+                        hovered = value;
+                        MarkDirty();
+                    }
+                }
+            }
+
+            public float IconScale
+            {
+                get => iconScale;
+                set
+                {
+                    iconScale = value;
+
+                    if (channelButton != null)
+                        channelButton.ImageScale = value;
+
+                    if (forceDisplayButton != null)
+                        forceDisplayButton.ImageScale = value;
+                }
+            }
+
+            LocalizedString MuteChannelTooltip;
+            LocalizedString SoloChannelTooltip;
+            LocalizedString ForceDisplayTooltip;
+            LocalizedString ForceDisplayAllChannelsTooltip;
+
+            public ChannelRow(ChannelArea channelArea, int channelIdx)
+            {
+                this.channelArea = channelArea;
+                Localization.Localize(this);
+                ChannelIndex = channelIdx;
+            }
+
+            protected override void OnAddedToContainer()
+            {
+                channelButton = new ChannelIconButton(ChannelType.Icons[ChannelType.Square1], () => SoloToggled?.Invoke(ChannelIndex))
+                {
+                    Transparent = true,
+                    ImageScale = iconScale
+                };
+
+                forceDisplayButton = new ChannelIconButton("GhostSmall", () => ForceDisplaySoloToggled?.Invoke(ChannelIndex))
+                {
+                    Transparent = true,
+                    ImageScale = iconScale
+                };
+
+                channelButton.Click      += (s) => IconClicked?.Invoke(ChannelIndex);
+                forceDisplayButton.Click += (s) => ForceDisplayClicked?.Invoke(ChannelIndex);
+
+                channelButton.ImageEvent       += ChannelButton_ImageEvent;
+                forceDisplayButton.DimmedEvent += ForceDisplayButton_DimmedEvent;
+
+                channelButton.ToolTip      = $"<MouseLeft> {MuteChannelTooltip} - <MouseLeft><MouseLeft> {SoloChannelTooltip}";
+                forceDisplayButton.ToolTip = $"<MouseLeft> {ForceDisplayTooltip}\n<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
+
+                AddControl(channelButton);
+                AddControl(forceDisplayButton);
+            }
+
+            private string ChannelButton_ImageEvent(Control sender, ref Color tint)
+            {
+                var song    = App.SelectedSong;
+                var channel = song.Channels[ChannelIndex];
+                var showExp = channelArea.ShowExpansionIcons;
+                var opacity = (App.ChannelMask & (1L << ChannelIndex)) != 0 ? 255 : 50;
+
+                tint = Theme.LightGreyColor1.Transparent(opacity);
+
+                return showExp ? ExpansionType.Icons[channel.Expansion] : ChannelType.Icons[channel.Type];
+            }
+
+            private bool ForceDisplayButton_DimmedEvent(Control sender, ref int dimming)
+            {
+                dimming = 50;
+                return (App.ForceDisplayChannelMask & (1L << ChannelIndex)) == 0;
+            }
+
+            protected override void OnResize(EventArgs e)
+            {
+                var iconSize  = DpiScaling.ScaleForWindow(16);
+                var ghostSize = DpiScaling.ScaleForWindow(12);
+
+                channelButton.Move(DpiScaling.ScaleForWindow(DefaultChannelIconPosX), DpiScaling.ScaleForWindow(DefaultChannelIconPosY));
+                channelButton.Resize(iconSize, iconSize);
+                forceDisplayButton.Move(Width - DpiScaling.ScaleForWindow(DefaultGhostNoteOffsetX), Height - DpiScaling.ScaleForWindow(DefaultGhostNoteOffsetY) - 1);
+                forceDisplayButton.Resize(ghostSize, ghostSize);
+            }
+
+            protected override void OnRender(Graphics g)
+            {
+                if (App == null ||
+                    App.SelectedSong == null ||
+                    ChannelIndex >= App.SelectedSong.Channels.Length)
+                    return;
+
+                var c = g.DefaultCommandList;
+                var channel = App.SelectedSong.Channels[ChannelIndex];
+                var dim = Settings.DimUnsupportedChannels && !channel.SupportsInstrument(App.SelectedInstrument, false);
+                var font = ChannelIndex == App.SelectedChannelIndex ? Fonts.FontMediumBold : Fonts.FontMedium;
+                var iconHeight = channelButton.Height;
+
+                c.FillRectangle(0, 0, Width, Height, hovered ? Theme.MediumGreyColor1.Transparent(dim ? 192 : 255) : Theme.DarkGreyColor2);
+
+                if (dim)
+                    c.FillRectangle(0, 0, Width, Height, Theme.BlackColor.Transparent(80));
+
+                c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
+                c.DrawText(channel.LocalizedName, font, DpiScaling.ScaleForWindow(DefaultChannelNamePosX), DpiScaling.ScaleForWindow(DefaultChannelIconPosY), Theme.LightGreyColor2.Transparent(dim ? 80 : 255), TextFlags.MiddleLeft, 0, iconHeight);
+
+                base.OnRender(g);
+            }
+
+            private class ChannelIconButton : Button
+            {
+                private readonly Action doubleClick;
+
+                public ChannelIconButton(string image, Action doubleClick) : base(image)
+                {
+                    this.doubleClick = doubleClick;
+                    SetSupportsDoubleClick(true);
+                }
+
+                protected override void OnMouseDoubleClick(PointerEventArgs e)
+                {
+                    if (Enabled && e.Left)
+                    {
+                        doubleClick?.Invoke();
+                        e.MarkHandled();
+                    }
+                }
+
+                protected override void OnTouchDoubleClick(PointerEventArgs e)
+                {
+                    OnMouseDoubleClick(e);
+                }
+            }
+        }
+        private class ChannelRowsContainer : Container
+        {
+            public int BottomY { get; set; }
+
+            protected override void OnRender(Graphics g)
+            {
+                base.OnRender(g);
+
+                var c = g.DefaultCommandList;
+
+                // TODO: This shouldn't require a custom class just to simply draw a bottom line.
+                if (BottomY >= 0 && BottomY < Height)
+                    c.DrawLine(0, BottomY, Width, BottomY, Theme.BlackColor);
+            }
+        }
+    }
+}

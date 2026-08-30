@@ -10881,7 +10881,6 @@ namespace FamiStudio
                         }
 
                         var captureOp = GetHighlightedNoteCaptureOperationForCoord(pt.X, pt.Y);
-
                         switch (captureOp)
                         {
                             case CaptureOperation.ResizeNoteStart:
@@ -10904,7 +10903,10 @@ namespace FamiStudio
                 }
                 else
                 {
-                    Cursor = Cursors.Default;
+                    if (captureOperation == CaptureOperation.DragNote || captureOperation == CaptureOperation.DragSelection)
+                        Cursor = Cursors.Move;
+                    else
+                        Cursor = Cursors.Default;
                 }
             }
         }

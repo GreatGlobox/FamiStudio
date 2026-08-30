@@ -9,6 +9,7 @@ namespace FamiStudio
     {
         private PropertyPage props;
         private Song song;
+        private Func<int, bool> patternFilter;
 
         private int patternIdx    = -1;
         private int minPatternIdx = -1;
@@ -78,7 +79,7 @@ namespace FamiStudio
 
         #endregion
 
-        public TempoProperties(PropertyPage props, Song song, int patternIdx = -1, int minPatternIdx = -1, int maxPatternIdx = -1)
+        public TempoProperties(PropertyPage props, Song song, int patternIdx = -1, int minPatternIdx = -1, int maxPatternIdx = -1, Func<int, bool> patternFilter = null)
         {
             Localization.Localize(this);
 
@@ -87,6 +88,7 @@ namespace FamiStudio
             this.patternIdx = patternIdx;
             this.minPatternIdx = minPatternIdx;
             this.maxPatternIdx = maxPatternIdx;
+            this.patternFilter = patternFilter;
 
             props.PropertyChanged += Props_PropertyChanged;
         }
@@ -146,6 +148,11 @@ namespace FamiStudio
 
                 UpdateWarnings();
             }
+        }
+
+        private bool ShouldApplyToPattern(int idx)
+        {
+            return patternFilter == null || patternFilter(idx);
         }
 
         private void Props_PropertyChanged(PropertyPage props, int propIdx, int rowIdx, int colIdx, object value)
@@ -329,16 +336,19 @@ namespace FamiStudio
                 {
                     for (int i = minPatternIdx; i <= maxPatternIdx; i++)
                     {
-                        var beatLength    = props.GetPropertyValue<int>(notesPerBeatPropIdx);
-                        var patternLength = props.GetPropertyValue<int>(notesPerPatternPropIdx);
+                        if (ShouldApplyToPattern(i))
+                        {
+                            var beatLength    = props.GetPropertyValue<int>(notesPerBeatPropIdx);
+                            var patternLength = props.GetPropertyValue<int>(notesPerPatternPropIdx);
 
-                        if (custom)
-                        {
-                            song.SetPatternCustomSettings(i, patternLength, beatLength);
-                        }
-                        else
-                        {
-                            song.ClearPatternCustomSettings(i);
+                            if (custom)
+                            {
+                                song.SetPatternCustomSettings(i, patternLength, beatLength);
+                            }
+                            else
+                            {
+                                song.ClearPatternCustomSettings(i);
+                            }
                         }
                     }
                 }
@@ -395,7 +405,7 @@ namespace FamiStudio
                     var patternsToResize = new List<int>();
                     for (int i = minPatternIdx; i <= maxPatternIdx; i++)
                     {
-                        if (actualNoteLength != song.GetPatternNoteLength(patternIdx))
+                        if (ShouldApplyToPattern(i) && actualNoteLength != song.GetPatternNoteLength(patternIdx))
                         {
                             patternsToResize.Add(i);
                         }
@@ -419,13 +429,16 @@ namespace FamiStudio
 
                         for (int i = minPatternIdx; i <= maxPatternIdx; i++)
                         {
-                            if (custom)
+                            if (ShouldApplyToPattern(i))
                             {
-                                song.SetPatternCustomSettings(i, actualPatternLength, actualBeatLength, groove, groovePadMode);
-                            }
-                            else
-                            {
-                                song.ClearPatternCustomSettings(i);
+                                if (custom)
+                                {
+                                    song.SetPatternCustomSettings(i, actualPatternLength, actualBeatLength, groove, groovePadMode);
+                                }
+                                else
+                                {
+                                    song.ClearPatternCustomSettings(i);
+                                }
                             }
                         }
 
