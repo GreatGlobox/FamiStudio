@@ -163,22 +163,23 @@ namespace FamiStudio
         public event EmptyDelegate SelectionChanged;
         public event EmptyDelegate ShyChanged;
 
-        internal int ViewScrollX => scrollX;
-        internal int ViewScrollY => scrollY;
-        internal int HeaderSizeY => headerSizeY;
-        internal int ChannelSizeY => channelSizeY;
-        internal int ChannelNameSizeX => channelNameSizeX;
-        internal int ContentBottomY => height - resizeBarSizeY - scrollBarThickness;
-        internal int ResizeBarTopY => height - resizeBarSizeY;
-        internal float NoteSizeX => noteSizeX;
-        internal bool LegacySelectMode => legacySelectMode;
-        internal bool HasTimelineSelection => legacySelectMode ? IsValidTimeOnlySelection() : selectedPatternColumns.Count > 0;
-        internal bool OutlineTimelineSelection => !legacySelectMode && HasTimelineSelection;
-        internal bool ShowTimelineSelectionFill => HasTimelineSelection && (legacySelectMode || captureOperation == CaptureOperation.SelectColumn);
-        internal int SelectionMinPattern => HasTimelineSelection ? selectionMin.PatternIndex : -1;
-        internal int SelectionMaxPattern => HasTimelineSelection ? selectionMax.PatternIndex : -1;
-        internal int SeekFrameToDraw => GetSeekFrameToDraw();
-        internal bool IsResizing => captureOperation == CaptureOperation.ResizeSequencer;
+        internal int   ViewScrollX                   => scrollX;
+        internal int   ViewScrollY                   => scrollY;
+        internal int   HeaderSizeY                   => headerSizeY;
+        internal int   ChannelSizeY                  => channelSizeY;
+        internal int   ChannelNameSizeX              => channelNameSizeX;
+        internal int   ContentBottomY                => height - resizeBarSizeY - scrollBarThickness;
+        internal int   ResizeBarTopY                 => height - resizeBarSizeY;
+        internal float NoteSizeX                     => noteSizeX;
+        internal bool  LegacySelectMode              => legacySelectMode;
+        internal bool  HasTimelineSelection          => legacySelectMode ? IsValidTimeOnlySelection() : selectedPatternColumns.Count > 0;
+        internal bool  OutlineTimelineSelection      => !legacySelectMode && HasTimelineSelection;
+        internal bool  ShowTimelineSelectionFill     => HasTimelineSelection && (legacySelectMode || captureOperation == CaptureOperation.SelectColumn);
+        internal int   SelectionMinPattern           => HasTimelineSelection ? selectionMin.PatternIndex : -1;
+        internal int   SelectionMaxPattern           => HasTimelineSelection ? selectionMax.PatternIndex : -1;
+        internal int   SeekFrameToDraw               => GetSeekFrameToDraw();
+        internal bool  IsResizing                    => captureOperation == CaptureOperation.ResizeSequencer;
+        internal bool  ColumnSelectionThresholdMet   => captureOperation == CaptureOperation.SelectColumn && captureThresholdMet;
         internal Color SeekBarColor                  => GetSeekBarColor();
         internal Color SelectedPatternVisibleColor   => selectedPatternVisibleColor;
         internal Color SelectedPatternInvisibleColor => selectedPatternInvisibleColor;
@@ -427,11 +428,7 @@ namespace FamiStudio
 
         private void RecreateChannelRows()
         {
-            if (Song == null || channelArea == null)
-                return;
-
-            channelArea.RecreateRows(channelBitmapScale);
-            UpdateChannelRowLayout();
+            channelArea?.RecreateRows(channelBitmapScale);
         }
 
         private void UpdateChannelRowHover()
@@ -441,25 +438,22 @@ namespace FamiStudio
 
         private void UpdateChannelRowLayout()
         {
-            if (Song == null || channelArea == null || channelToRow == null)
-                return;
-
-            channelArea.Resize(channelNameSizeX, ContentBottomY);
-            channelArea.UpdateLayout(channelToRow);
+            channelArea?.Resize(channelNameSizeX, ContentBottomY);
+            channelArea?.UpdateLayout(channelToRow);
         }
 
         private void UpdateTimelineLayout()
         {
-            if (timeline == null)
-                return;
-
-            timeline.Move(channelNameSizeX, 0);
-            timeline.Resize(width - channelNameSizeX, headerSizeY + 1);
+            timeline?.Move(channelNameSizeX, 0);
+            timeline?.Resize(width - channelNameSizeX, headerSizeY + 1);
         }
         
         public override void OnContainerPointerMoveNotify(Control control, PointerEventArgs e)
         {
             var p = WindowToControl(control.ControlToWindow(e.Position));
+
+            if (control == timeline && captureOperation == CaptureOperation.SelectColumn)
+                UpdateCaptureOperation(p.X, p.Y);
 
             SetMouseLastPos(p.X, p.Y);
             UpdateHover(p.X, p.Y);
@@ -474,8 +468,17 @@ namespace FamiStudio
         
         public override void OnContainerPointerUpNotify(Control control, PointerEventArgs e)
         {
-            if (control == channelArea || control.IsInContainer(channelArea))
+            if (control == timeline)
+            {
+                var p = WindowToControl(timeline.ControlToWindow(e.Position));
+
+                if (captureOperation == CaptureOperation.SelectColumn)
+                    EndCaptureOperation(p.X, p.Y);
+            }
+            else if (control == channelArea || control.IsInContainer(channelArea))
+            {
                 HandleMouseUpChannelName(e);
+            }
         }
 
         public void Reset()
@@ -484,7 +487,7 @@ namespace FamiStudio
             scrollY = 0;
             zoom = DefaultZoom;
             ClearSelection();
-            UpdateRenderCoords();
+            SetHideEmptyChannels(false);
             RecreateChannelRows();
             InvalidatePatternCache();
         }
@@ -552,7 +555,6 @@ namespace FamiStudio
         public void SetHideEmptyChannels(bool hide)
         {
             hideEmptyChannels = hide;
-            RebuildChannelMap();
 
             if (channelArea != null)
                 channelArea.HideEmptyChannels = hide;
@@ -698,7 +700,6 @@ namespace FamiStudio
             channelArea.ShyClicked += () =>
             {
                 SetHideEmptyChannels(!hideEmptyChannels);
-                UpdateChannelRowLayout();
                 ShyChanged?.Invoke();
             };
             channelArea.Move(0, 0);
@@ -714,7 +715,6 @@ namespace FamiStudio
             AddControl(channelArea);
             AddControl(timeline);
 
-            RecreateChannelRows();
             UpdateChannelRowLayout();
         }
 
@@ -1418,20 +1418,23 @@ namespace FamiStudio
             return y >= height - DpiScaling.ScaleForWindow(resizeBarSizeY);
         }
 
-        private void CaptureMouse(int x, int y)
+        private void CaptureMouse(int x, int y, Control captureControl = null)
         {
             SetMouseLastPos(x, y);
             captureMouseX = x;
             captureMouseY = y;
             captureScrollX = scrollX;
             captureScrollY = scrollY;
-            CapturePointer();
+
+            (captureControl ?? this).CapturePointer();
         }
 
-        private void StartCaptureOperation(int x, int y, CaptureOperation op)
+        private void StartCaptureOperation(int x, int y, CaptureOperation op, Control captureControl = null)
         {
             Debug.Assert(captureOperation == CaptureOperation.None);
-            CaptureMouse(x, y);
+
+            CaptureMouse(x, y, captureControl);
+
             canFling = false;
             captureOperation = op;
             captureThresholdMet = !captureNeedsThreshold[(int)op];
@@ -1502,7 +1505,7 @@ namespace FamiStudio
         private void Timeline_ColumnSelectionRequested(Control sender, PointerEventArgs e)
         {
             var p = WindowToControl(timeline.ControlToWindow(e.Position));
-            StartColumnSelection(p.X, p.Y);
+            StartColumnSelection(p.X, p.Y, sender);
         }
 
         private void Timeline_EditPatternSettings(int patternIdx, Point pt)
@@ -1998,8 +2001,11 @@ namespace FamiStudio
             StartCaptureOperation(x, y, CaptureOperation.SelectRectangle);
         }
 
-        private void StartColumnSelection(int x, int y)
+        private void StartColumnSelection(int x, int y, Control captureControl = null)
         {
+            captureSelectionMin = PatternLocation.Invalid;
+            captureSelectionMax = PatternLocation.Invalid;
+
             captureSelectedPatternColumns.Clear();
             captureSelectedPatternLocations.Clear();
 
@@ -2009,7 +2015,7 @@ namespace FamiStudio
             foreach (var location in selectedPatternLocations)
                 captureSelectedPatternLocations.Add(location);
 
-            StartCaptureOperation(x, y, CaptureOperation.SelectColumn);
+            StartCaptureOperation(x, y, CaptureOperation.SelectColumn, captureControl);
         }
 
         private bool UpdateSelectedPatternRefCounts()

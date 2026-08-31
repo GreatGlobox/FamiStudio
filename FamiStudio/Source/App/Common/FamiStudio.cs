@@ -922,7 +922,6 @@ namespace FamiStudio
             StaticProject = project;
             song = project.Songs[0];
             palPlayback = project.PalMode;
-            Sequencer.SetHideEmptyChannels(false);
 
             ResetEverything();
             InitializeAutoSave();

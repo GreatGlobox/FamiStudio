@@ -39,6 +39,7 @@ namespace FamiStudio
 
             Localization.Localize(this);
             SetTickEnabled(true);
+            SupportsLongPress = true;
         }
 
         protected override void OnAddedToContainer()
@@ -124,14 +125,7 @@ namespace FamiStudio
         protected override void OnPointerDown(PointerEventArgs e)
         {
             if (e.IsTouchEvent)
-            {
-                if (Math.Abs(GetPixelForNote(sequencer.SeekFrameToDraw) - e.X) < headerSizeY)
-                    SeekDragRequested?.Invoke(this, e);
-                else
-                    ColumnSelectionRequested?.Invoke(this, e);
-
                 return;
-            }
 
             if (e.Left && Settings.SetLoopPointShortcut.IsKeyDown(ParentWindow))
             {
@@ -154,14 +148,38 @@ namespace FamiStudio
 
         protected override void OnPointerUp(PointerEventArgs e)
         {
-            if (e.Right)
-                ShowContextMenu(e.X, e.Y);
+            if (e.Right || e.IsLongPress)
+            {
+                if (!sequencer.ColumnSelectionThresholdMet)
+                    ShowContextMenu(e.X, e.Y);
+
+                return;
+            }
+
+            if (e.IsTouchEvent)
+                App.SeekSong(GetNoteForPixel(e.X));
         }
 
-        protected override void OnTouchClick(PointerEventArgs e)
+        protected override void OnTouchLongPress(PointerEventArgs e)
         {
-            // TODO: Can this not just call OnPointerDown?
-            App.SeekSong(GetNoteForPixel(e.X));
+            var x = e.X;
+            var y = e.Y;
+
+            if (e.IsDoubleTapLongPress)
+                return;
+
+            // Trigger the context menu if using legacy selection. Otherwise, start a selection.
+            if (sequencer.LegacySelectMode)
+            {
+                ShowContextMenu(x, y);
+            }
+            else
+            {
+                Platform.VibrateClick();
+                ColumnSelectionRequested?.Invoke(this, e);
+            }
+
+            MarkDirty();
         }
 
         protected override void OnResize(EventArgs e)

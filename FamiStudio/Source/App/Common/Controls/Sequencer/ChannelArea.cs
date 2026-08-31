@@ -5,7 +5,7 @@ namespace FamiStudio
     internal class ChannelArea : Container
     {
         private readonly Sequencer sequencer;
-        private ChannelRowsContainer rowsContainer;
+        private Container rowsContainer;
         private ChannelRow[] rows;
         private Button shyButton;
         private bool hideEmptyChannels;
@@ -66,7 +66,7 @@ namespace FamiStudio
 
         protected override void OnAddedToContainer()
         {
-            rowsContainer = new ChannelRowsContainer();
+            rowsContainer = new Container();
 
             shyButton = new Button("ShyOff")
             {
@@ -127,7 +127,6 @@ namespace FamiStudio
             this.channelToRow = channelToRow;
 
             rowsContainer.Move(0, sequencer.HeaderSizeY);
-            rowsContainer.Resize(Width, sequencer.ContentBottomY - sequencer.HeaderSizeY);
 
             shyButton.Move(Width - sequencer.HeaderSizeY, 0);
             shyButton.Resize(sequencer.HeaderSizeY, sequencer.HeaderSizeY);
@@ -141,10 +140,10 @@ namespace FamiStudio
             {
                 var row = rows[i];
                 var rowIdx = channelToRow[i];
-
                 if (rowIdx < 0)
                 {
                     row.Visible = false;
+                    row.Hovered = false;
                     continue;
                 }
 
@@ -154,7 +153,11 @@ namespace FamiStudio
                 row.Resize(Width, sequencer.ChannelSizeY);
             }
 
-            bottomY = sequencer.HeaderSizeY + (maxRow + 1) * sequencer.ChannelSizeY;
+            var rowCount = maxRow + 1;
+
+            rowsContainer.Visible = rowCount > 0;
+            rowsContainer.Resize(Width, rowCount * sequencer.ChannelSizeY);
+            bottomY = sequencer.HeaderSizeY + rowCount * sequencer.ChannelSizeY;
 
             UpdateRowPositions();
         }
@@ -172,8 +175,6 @@ namespace FamiStudio
                 if (rowIdx >= 0)
                     rows[i].Move(0, rowIdx * sequencer.ChannelSizeY - sequencer.ViewScrollY);
             }
-
-            rowsContainer.BottomY = bottomY - sequencer.HeaderSizeY - sequencer.ViewScrollY;
         }
 
         private void ConditionalUpdateRowScroll()
@@ -188,7 +189,10 @@ namespace FamiStudio
                 return;
 
             for (var i = 0; i < rows.Length; i++)
-                rows[i].Hovered = channelToRow[i] == hoverRow;
+            {
+                var rowIdx = channelToRow[i];
+                rows[i].Hovered = rowIdx >= 0 && rowIdx == hoverRow;
+            }
         }
 
         protected override void OnRender(Graphics g)
@@ -199,29 +203,31 @@ namespace FamiStudio
 
             c.FillRectangle(0, 0, Width, Height, Theme.DarkGreyColor2);
 
-            base.OnRender(g);
-
+            // Header.
             c.DrawLine(Width - 1, 0, Width - 1, Height, Theme.BlackColor);
             c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
             c.DrawLine(0, sequencer.HeaderSizeY, Width, sequencer.HeaderSizeY, Theme.BlackColor);
 
-            // Bottom of the visible channel-row viewport.
-            var y = rowsContainer.Top + rowsContainer.Height - 1;
-            c.DrawLine(0, y, Width, y, Theme.BlackColor);
-
             if (Platform.IsMobile && IsLandscape)
                 c.DrawLine(0, 0, 0, Height, Theme.BlackColor);
+
+            // Bottom line.
+            c.DrawLine(0, bottomY, Width, bottomY, Theme.BlackColor);
+
+            base.OnRender(g);
         }
 
         private class ChannelRow : Container
         {
-            const int DefaultChannelIconPosX     = 2;
-            const int DefaultChannelIconPosY     = 3;
-            const int DefaultChannelNamePosX     = 21;
-            const int DefaultGhostNoteOffsetX    = 16;
-            const int DefaultGhostNoteOffsetY    = Platform.IsMobile ? 16 : 15;
+            const int DefaultChannelIconPosX  = 2;
+            const int DefaultChannelIconPosY  = 3;
+            const int DefaultChannelNamePosX  = 21;
+            const int DefaultGhostNoteOffsetX = 16;
+            const int DefaultGhostNoteOffsetY = Platform.IsMobile ? 16 : 15;
+            const int DefaultChannelIconSize  = 16;
+            const int DefaultGhostIconSize    = 12;
             
-            private ChannelArea channelArea;
+            private readonly ChannelArea channelArea;
             private Button channelButton;
             private Button forceDisplayButton;
             private bool hovered;
@@ -322,8 +328,8 @@ namespace FamiStudio
 
             protected override void OnResize(EventArgs e)
             {
-                var iconSize  = DpiScaling.ScaleForWindow(16);
-                var ghostSize = DpiScaling.ScaleForWindow(12);
+                var iconSize  = DpiScaling.ScaleForWindow(DefaultChannelIconSize);
+                var ghostSize = DpiScaling.ScaleForWindow(DefaultGhostIconSize);
 
                 channelButton.Move(DpiScaling.ScaleForWindow(DefaultChannelIconPosX), DpiScaling.ScaleForWindow(DefaultChannelIconPosY));
                 channelButton.Resize(iconSize, iconSize);
@@ -333,9 +339,7 @@ namespace FamiStudio
 
             protected override void OnRender(Graphics g)
             {
-                if (App == null ||
-                    App.SelectedSong == null ||
-                    ChannelIndex >= App.SelectedSong.Channels.Length)
+                if (ChannelIndex >= App.SelectedSong.Channels.Length)
                     return;
 
                 var c = g.DefaultCommandList;
@@ -350,6 +354,7 @@ namespace FamiStudio
                     c.FillRectangle(0, 0, Width, Height, Theme.BlackColor.Transparent(80));
 
                 c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
+                c.DrawLine(Width - 1, 0, Width - 1, Height, Theme.BlackColor);
                 c.DrawText(channel.LocalizedName, font, DpiScaling.ScaleForWindow(DefaultChannelNamePosX), DpiScaling.ScaleForWindow(DefaultChannelIconPosY), Theme.LightGreyColor2.Transparent(dim ? 80 : 255), TextFlags.MiddleLeft, 0, iconHeight);
 
                 base.OnRender(g);
@@ -378,21 +383,6 @@ namespace FamiStudio
                 {
                     OnMouseDoubleClick(e);
                 }
-            }
-        }
-        private class ChannelRowsContainer : Container
-        {
-            public int BottomY { get; set; }
-
-            protected override void OnRender(Graphics g)
-            {
-                base.OnRender(g);
-
-                var c = g.DefaultCommandList;
-
-                // TODO: This shouldn't require a custom class just to simply draw a bottom line.
-                if (BottomY >= 0 && BottomY < Height)
-                    c.DrawLine(0, BottomY, Width, BottomY, Theme.BlackColor);
             }
         }
     }
