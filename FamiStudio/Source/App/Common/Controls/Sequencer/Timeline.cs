@@ -19,7 +19,6 @@ namespace FamiStudio
         private int headerIconPosX;
         private int headerIconPosY;
         private float bitmapScale;
-        private bool resizing;
 
         public delegate void EditPatternSettingsDelegate(int patternIdx, Point position);
         public EditPatternSettingsDelegate EditPatternSettings;
@@ -38,7 +37,6 @@ namespace FamiStudio
             this.sequencer = sequencer;
 
             Localization.Localize(this);
-            SetTickEnabled(true);
             SupportsLongPress = true;
         }
 
@@ -216,8 +214,7 @@ namespace FamiStudio
             {
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
                 var sx = (int)(Song.GetPatternLength(i) * (double)sequencer.NoteSizeX);
-
-                var color = !resizing && i == hoverPattern ? Theme.MediumGreyColor1  : ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
+                var color = !sequencer.IsResizing && i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
 
                 b.FillRectangle(px, 0, px + sx, headerSizeY, color);
             }

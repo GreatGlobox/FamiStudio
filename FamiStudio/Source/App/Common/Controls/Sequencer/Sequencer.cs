@@ -433,7 +433,7 @@ namespace FamiStudio
 
         private void UpdateChannelRowHover()
         {
-            channelArea?.SetHover(channelToRow, hoverRow);
+            channelArea?.SetHover(hoverRow);
         }
 
         private void UpdateChannelRowLayout()
@@ -459,7 +459,7 @@ namespace FamiStudio
             UpdateHover(p.X, p.Y);
             UpdateCursor();
         }
-        
+
         public override void OnContainerPointerDownNotify(Control control, PointerEventArgs e)
         {
             if (e.Middle || (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle))

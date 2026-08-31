@@ -183,11 +183,8 @@ namespace FamiStudio
                 UpdateRowPositions();
         }
 
-        public void SetHover(int[] channelToRow, int hoverRow)
+        public void SetHover(int hoverRow)
         {
-            if (rows == null || channelToRow == null)
-                return;
-
             for (var i = 0; i < rows.Length; i++)
             {
                 var rowIdx = channelToRow[i];
