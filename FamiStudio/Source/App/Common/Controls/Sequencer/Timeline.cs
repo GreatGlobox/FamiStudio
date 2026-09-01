@@ -28,7 +28,9 @@ namespace FamiStudio
 
         LocalizedString ClearLoopPointLabel;
         LocalizedString SetLoopPointLabel;
-        LocalizedString CustomPatternSettingsLabel;
+        LocalizedString CustomPatternSettingsLabel; 
+        LocalizedString SeekTooltip;
+        LocalizedString SelectColumnTooltip;
 
         private Song Song => App?.SelectedSong;
 
@@ -37,6 +39,14 @@ namespace FamiStudio
             this.sequencer = sequencer;
 
             Localization.Localize(this);
+
+            ToolTip =
+                $"<MouseLeft> {SeekTooltip} - " +
+                $"<MouseRight> {sequencer.MoreOptionsText} - " +
+                $"<MouseRight><Drag> {SelectColumnTooltip}\n" +
+                $"<L><MouseLeft> {sequencer.PanText} - " +
+                $"<MouseWheel><Drag> {sequencer.SetLoopPointText}";
+
             SupportsLongPress = true;
         }
 
@@ -84,6 +94,14 @@ namespace FamiStudio
             return sequencer.IsPatternColumnSelected(patternIdx);
         }
 
+        private bool IsPointOnSeekBar(int x)
+        {
+            var seekX = GetPixelForNote(sequencer.SeekFrameToDraw);
+            var margin = DpiScaling.ScaleForWindow(12);
+
+            return Math.Abs(x - seekX) <= margin;
+        }
+
         private void SetLoopPoint(int patternIdx)
         {
             App.UndoRedoManager.BeginTransaction(TransactionScope.Song, Song.Id);
@@ -116,14 +134,37 @@ namespace FamiStudio
 
         protected override void OnPointerDownDelayed(PointerEventArgs e)
         {
+            base.OnPointerDownDelayed(e);
+
+            if (e.IsTouchEvent)
+            {
+                if (sequencer.LegacySelectMode)
+                    ColumnSelectionRequested?.Invoke(this, e);
+
+                return;
+            }
+
             if (e.Right)
+            {
+                CapturePointer();
                 ColumnSelectionRequested?.Invoke(this, e);
+            }
         }
 
         protected override void OnPointerDown(PointerEventArgs e)
         {
+            base.OnPointerDown(e);
+
             if (e.IsTouchEvent)
+            {
+                if (IsPointOnSeekBar(e.X))
+                {
+                    CapturePointer();
+                    SeekDragRequested?.Invoke(this, e);
+                }
+
                 return;
+            }
 
             if (e.Left && Settings.SetLoopPointShortcut.IsKeyDown(ParentWindow))
             {
@@ -146,6 +187,8 @@ namespace FamiStudio
 
         protected override void OnPointerUp(PointerEventArgs e)
         {
+            base.OnPointerUp(e);
+            
             if (e.Right || e.IsLongPress)
             {
                 if (!sequencer.ColumnSelectionThresholdMet)
@@ -178,6 +221,18 @@ namespace FamiStudio
             }
 
             MarkDirty();
+        }
+
+        protected override void OnMouseWheel(PointerEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            sequencer.HandleMouseWheel(this, e);
+        }
+
+        protected override void OnMouseHorizontalWheel(PointerEventArgs e)
+        {
+            base.OnMouseHorizontalWheel(e);
+            sequencer.HandleMouseHorizontalWheel(this, e);
         }
 
         protected override void OnResize(EventArgs e)

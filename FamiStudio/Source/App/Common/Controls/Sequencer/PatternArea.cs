@@ -1,0 +1,782 @@
+using System;
+using System.Collections.Generic;
+
+namespace FamiStudio
+{
+    internal class PatternArea : Container
+    {
+        const int DefaultPatternHeaderSizeY = 13;
+        const int DefaultPatternNamePosX    = 2;
+
+        private readonly Sequencer sequencer;
+
+        private int patternHeaderSizeY;
+        private int patternNamePosX;
+
+        private float bitmapScale = 1.0f;
+
+        private Point mousePosition;
+
+        private PatternBitmapCache patternCache;
+
+        private TextureAtlasRef bmpDuplicate;
+        private TextureAtlasRef bmpDuplicateMove;
+        private TextureAtlasRef bmpMenuInstance;
+
+        private Song Song => App?.SelectedSong;
+
+        private int PatternHeaderSizeY            => patternHeaderSizeY;
+        private int PatternNamePosX               => patternNamePosX;
+        private int ViewScrollX                   => sequencer.ViewScrollX;
+        private int ViewScrollY                   => sequencer.ViewScrollY;
+        private int ChannelSizeY                  => sequencer.ChannelSizeY;
+        private int VisibleRowCount               => sequencer.VisibleRowCount;
+        private int SelectionDragAnchorPatternIdx => sequencer.SelectionDragAnchorPatternIdx;
+
+        private float NoteSizeX                           => sequencer.NoteSizeX;
+        private float SelectionDragAnchorPatternXFraction => sequencer.SelectionDragAnchorPatternXFraction;
+
+        private bool LegacySelectMode => sequencer.LegacySelectMode;
+        private bool HasSelection     => sequencer.HasSelection;
+
+        private PatternLocation SelectionMin        => sequencer.SelectionMin;
+        private PatternLocation SelectionMax        => sequencer.SelectionMax;
+        private PatternLocation CaptureSelectionMin => sequencer.CaptureSelectionMin;
+        private PatternLocation CaptureSelectionMax => sequencer.CaptureSelectionMax;
+
+        private bool IsTimeOnlySelection          => sequencer.IsTimeOnlySelection;
+        private bool IsRectangleSelectionCapture  => sequencer.IsRectangleSelectionCapture;
+        private bool IsColumnSelectionCapture     => sequencer.IsColumnSelectionCapture;
+        private bool IsDragSelectionCapture       => sequencer.IsDragSelectionCapture;
+
+        private Color SelectionColor                => sequencer.IsActiveControl ? SelectedPatternVisibleColor : SelectedPatternInvisibleColor;
+        private Color SelectedPatternVisibleColor   => sequencer.SelectedPatternVisibleColor;
+        private Color SelectedPatternInvisibleColor => sequencer.SelectedPatternInvisibleColor;
+        private Color HighlightedPatternColor       => sequencer.HighlightedPatternColor;
+
+        private PatternLocation HighlightLocation => sequencer.HighlightLocation;
+        private IEnumerable<PatternLocation> SelectedPatternLocations => sequencer.SelectedPatternLocations;
+
+        LocalizedString AddPatternTooltip;
+        LocalizedString SelectRectangleTooltip;
+        LocalizedString OrTooltip;
+        LocalizedString DeletePatternTooltip;
+        LocalizedString MovePatternTooltip;
+        LocalizedString ClonePatternTooltip;
+        LocalizedString GoToPianoRollLabel;
+        LocalizedString ExpandSelectionLabel;
+        LocalizedString InstanciateHereLabel;
+        LocalizedString DuplicateHereLabel;
+        LocalizedString ClearSelectionLabel;
+        LocalizedString DeleteSelectionLabel;
+        LocalizedString SelectedPatternPropertiesLabel;
+        LocalizedString PatternPropertiesLabel;
+        LocalizedString DeletePatternLabel;
+        LocalizedString MakePatternsUniqueLabel;
+        LocalizedString MergeIdenticalPatternsLabel;
+
+        internal PatternArea(Sequencer sequencer)
+        {
+            this.sequencer = sequencer;
+            Localization.Localize(this);
+            supportsDoubleClick = true;
+            supportsLongPress   = true;
+        }
+
+        protected override void OnAddedToContainer()
+        {
+            base.OnAddedToContainer();
+
+            var g = ParentWindow.Graphics;
+
+            patternCache = new PatternBitmapCache(g);
+            bmpDuplicate = g.GetTextureAtlasRef("MenuCopy");
+            bmpDuplicateMove = g.GetTextureAtlasRef("DuplicateMove");
+            bmpMenuInstance = g.GetTextureAtlasRef("MenuInstance");
+
+            // TODO: Should we be passing this from sequencer?
+            if (Platform.IsMobile)
+                bitmapScale = DpiScaling.ScaleForWindowFloat(0.5f);
+
+            UpdateRenderCoords();
+        }
+
+        private void UpdateRenderCoords()
+        {
+            // Shave a couple pixels when the size is getting too small.
+            patternHeaderSizeY = DpiScaling.ScaleForFont(ChannelSizeY < DpiScaling.ScaleForWindow(24) ? DefaultPatternHeaderSizeY - 2 : DefaultPatternHeaderSizeY);
+            patternNamePosX    = DpiScaling.ScaleForWindow(DefaultPatternNamePosX);
+        }
+
+        private void UpdateToolTip(PointerEventArgs e)
+        {
+            var tooltip = "";
+
+            if (GetPatternForCoord(e.X, e.Y, out var location))
+            {
+                var pattern = Song.GetPatternInstance(location);
+                var tooltipList = new List<string>();
+
+                if (pattern == null)
+                    tooltipList.Add($"<MouseLeft> {AddPatternTooltip}");
+
+                if (Settings.SetLoopPointShortcut.IsShortcutValid(0))
+                    tooltipList.Add($"{Settings.SetLoopPointShortcut.TooltipString}<MouseLeft> {sequencer.SetLoopPointText}");
+
+                tooltipList.Add($"<MouseWheel><Drag> {sequencer.PanText}");
+                tooltipList.Add($"<MouseRight><Drag> {SelectRectangleTooltip}");
+
+                if (pattern != null)
+                {
+                    tooltipList.Add($"<MouseLeft><MouseLeft> {OrTooltip} <Shift><MouseLeft> {DeletePatternTooltip}");
+                    tooltipList.Add($"<MouseRight> {sequencer.MoreOptionsText}");
+                }
+
+                if (sequencer.IsPatternSelected(location))
+                {
+                    tooltipList.Add($"<Drag> {MovePatternTooltip}");
+                    tooltipList.Add($"<Ctrl><Drag> {ClonePatternTooltip}");
+                }
+
+                if (tooltipList.Count >= 3)
+                {
+                    var array = tooltipList.ToArray();
+                    var numFirstLine = array.Length / 2;
+
+                    tooltip =
+                        string.Join(" - ", array, 0, numFirstLine) + "\n" +
+                        string.Join(" - ", array, numFirstLine, array.Length - numFirstLine);
+                }
+                else
+                {
+                    tooltip = string.Join(" - ", tooltipList);
+                }
+            }
+
+            App.SetToolTip(tooltip);
+        }
+
+        private int GetRowForChannel(int channelIdx)
+        {
+            return sequencer.GetRowForChannel(channelIdx);
+        }
+
+        private int GetPixelForNote(int note, bool scroll = true)
+        {
+            var x = (int)(note * (double)NoteSizeX);
+
+            if (scroll)
+                x -= ViewScrollX;
+
+            return x;
+        }
+
+        private int GetNoteForPixel(int x)
+        {
+            x += ViewScrollX;
+            return (int)(x / (double)NoteSizeX);
+        }
+
+        private void ShowContextMenu(PatternLocation location, int x, int y)
+        {
+            var pattern = Song.GetPatternInstance(location);
+
+            sequencer.SetHighlightedPattern(location);
+
+            var menu = new List<ContextMenuOption>();
+
+            if (Platform.IsMobile)
+            {
+                menu.Add(new ContextMenuOption(
+                    "MenuPiano",
+                    GoToPianoRollLabel,
+                    () => sequencer.GotoPianoRoll(location)));
+            }
+
+            if (sequencer.HasSelection && !sequencer.IsPatternSelected(location))
+            {
+                if (Platform.IsMobile)
+                {
+                    menu.Add(new ContextMenuOption(
+                        "MenuExpandSelection",
+                        ExpandSelectionLabel,
+                        () => sequencer.EnsureSelectionInclude(location)));
+                }
+
+                if (sequencer.IsSelectionOnChannel(location.ChannelIndex))
+                {
+                    menu.Add(new ContextMenuOption(
+                        "MenuInstance",
+                        InstanciateHereLabel,
+                        () => sequencer.CopySelectionToCursor(false)));
+                }
+
+                menu.Add(new ContextMenuOption(
+                    "MenuDuplicate",
+                    DuplicateHereLabel,
+                    () => sequencer.CopySelectionToCursor(true)));
+            }
+
+            if (sequencer.HasSelection)
+            {
+                menu.Add(new ContextMenuOption(
+                    "MenuClearSelection",
+                    ClearSelectionLabel,
+                    () =>
+                    {
+                        sequencer.ClearSelection();
+                        sequencer.ClearHighlightedPattern();
+                    },
+                    ContextMenuSeparator.Before));
+            }
+
+            if (pattern != null)
+            {
+                if (sequencer.IsPatternSelected(location) &&
+                    sequencer.SelectionContainsMultiplePatterns())
+                {
+                    menu.Insert(0, new ContextMenuOption(
+                        "MenuDeleteSelection",
+                        DeleteSelectionLabel,
+                        () => sequencer.DeleteSelection(true)));
+
+                    menu.Add(new ContextMenuOption(
+                        "MenuProperties",
+                        SelectedPatternPropertiesLabel,
+                        () => sequencer.EditPatternProperties(
+                            new Point(x, y), pattern, location, true),
+                        ContextMenuSeparator.Before));
+                }
+                else
+                {
+                    menu.Add(new ContextMenuOption(
+                        "MenuProperties",
+                        PatternPropertiesLabel,
+                        () => sequencer.EditPatternProperties(
+                            new Point(x, y), pattern, location, false),
+                        ContextMenuSeparator.Before));
+                }
+
+                menu.Insert(0, new ContextMenuOption(
+                    "MenuDelete",
+                    DeletePatternLabel,
+                    () => sequencer.DeletePattern(location)));
+            }
+
+            if (sequencer.IsPatternSelected(location))
+            {
+                if (sequencer.SelectedPatternsHaveSharedReferences())
+                {
+                    menu.Insert(1, new ContextMenuOption(
+                        "MenuUnlink",
+                        MakePatternsUniqueLabel,
+                        () => sequencer.MakeSelectedPatternsUnique()));
+                }
+
+                if (sequencer.SelectionContainsMultiplePatterns())
+                {
+                    menu.Insert(1, new ContextMenuOption(
+                        "MenuInstance",
+                        MergeIdenticalPatternsLabel,
+                        () => sequencer.MergeSelectedIdenticalPatterns()));
+                }
+            }
+
+            if (menu.Count > 0)
+                App.ShowContextMenuAsync(menu.ToArray());
+        }
+
+        internal bool GetPatternForCoord(int x, int y, out PatternLocation location)
+        {
+            var noteIdx = GetNoteForPixel(x);
+            if (noteIdx < 0 || noteIdx >= Song.GetPatternStartAbsoluteNoteIndex(Song.Length))
+            {
+                location = PatternLocation.Invalid;
+                return false;
+            }
+
+            var channelIdx = sequencer.GetChannelIndexForCoord(y + sequencer.HeaderSizeY);
+            if (channelIdx < 0)
+            {
+                location = PatternLocation.Invalid;
+                return false;
+            }
+
+            location = new PatternLocation(channelIdx, Song.PatternIndexFromAbsoluteNoteIndex(noteIdx));
+            return true;
+        }
+
+        internal void NotifyPatternChange(Pattern pattern)
+        {
+            if (pattern != null)
+                patternCache?.Remove(pattern);
+
+            MarkDirty();
+        }
+
+        public void ValidateIntegrity()
+        {
+            patternCache?.ValidateIntegrity();
+        }
+        
+        internal void InvalidatePatternCache()
+        {
+            patternCache?.Clear();
+            MarkDirty();
+        }
+
+        protected override void OnPointerMove(PointerEventArgs e)
+        {
+            mousePosition = e.Position;
+
+            base.OnPointerMove(e);
+
+            UpdateToolTip(e);
+            sequencer.PatternAreaPointerMove(e);
+        }
+
+        protected override void OnPointerDown(PointerEventArgs e)
+        {
+            if (!e.IsTouchEvent && e.Right && GetPatternForCoord(e.X, e.Y, out _))
+            {
+                e.DelayRightClick();
+            }
+
+            base.OnPointerDown(e);
+
+            if (e.IsTouchEvent)
+                return;
+
+            sequencer.PatternAreaPointerDown(e);
+
+            if (e.Left && sequencer.HasCaptureOperation)
+                CapturePointer();
+        }
+
+        protected override void OnPointerUp(PointerEventArgs e)
+        {
+            base.OnPointerUp(e);
+
+            var selection = IsRectangleSelectionCapture;
+
+            if (e.IsLongPress && !LegacySelectMode && selection && !sequencer.RectangleSelectionThresholdMet)
+            {
+                if (GetPatternForCoord(e.X, e.Y, out var location))
+                    ShowContextMenu(location, e.X, e.Y);
+            }
+
+            sequencer.PatternAreaPointerUp(e);
+
+            if (!selection &&
+                e.Right &&
+                GetPatternForCoord(e.X, e.Y, out var rightClickLocation))
+            {
+                ShowContextMenu(rightClickLocation, e.X, e.Y);
+            }
+        }
+        
+        protected override void OnPointerDownDelayed(PointerEventArgs e)
+        {
+            base.OnPointerDownDelayed(e);
+
+            if (e.Right)
+            {
+                CapturePointer();
+                sequencer.PatternAreaPointerDownDelayed(e);
+            }
+        }
+
+        protected override void OnMouseDoubleClick(PointerEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+
+            if (!e.Left)
+                return;
+
+            if (!GetPatternForCoord(e.X, e.Y, out var location))
+                return;
+
+            var pattern = Song.GetPatternInstance(location);
+            if (pattern != null)
+                sequencer.DeletePattern(location);
+        }
+
+        protected override void OnMouseWheel(PointerEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            sequencer.HandleMouseWheel(this, e);
+        }
+
+        protected override void OnMouseHorizontalWheel(PointerEventArgs e)
+        {
+            base.OnMouseHorizontalWheel(e);
+            sequencer.HandleMouseHorizontalWheel(this, e);
+        }
+
+        protected override void OnTouchClick(PointerEventArgs e)
+        {
+            base.OnTouchClick(e);
+
+            if (!GetPatternForCoord(e.X, e.Y, out var location))
+                return;
+
+            var pattern = Song.GetPatternInstance(location);
+            if (pattern == null)
+            {
+                sequencer.CreateNewPattern(location);
+                sequencer.SetHighlightedPattern(location);
+            }
+            else
+            {
+                if (HighlightLocation == location)
+                    sequencer.ClearHighlightedPattern();
+                else
+                    sequencer.SetHighlightedPattern(location);
+
+                // Tapping inside the current selection only toggles highlight.
+                if (sequencer.IsPatternSelected(location))
+                    return;
+            }
+
+            sequencer.SetSelection(location, location);
+        }
+
+        protected override void OnTouchDoubleClick(PointerEventArgs e)
+        {
+            base.OnTouchDoubleClick(e);
+
+            if (!GetPatternForCoord(e.X, e.Y, out var location))
+                return;
+
+            var pattern = Song.GetPatternInstance(location);
+            if (pattern != null)
+            {
+                sequencer.DeletePattern(location);
+                sequencer.ClearHighlightedPattern();
+            }
+        }
+
+        protected override void OnTouchLongPress(PointerEventArgs e)
+        {
+            base.OnTouchLongPress(e);
+
+            if (e.IsDoubleTapLongPress)
+                return;
+
+            sequencer.AbortCaptureOperation();
+
+            if (LegacySelectMode)
+            {
+                if (GetPatternForCoord(e.X, e.Y, out var location))
+                    ShowContextMenu(location, e.X, e.Y);
+            }
+            else
+            {
+                Platform.VibrateClick();
+
+                sequencer.StartRectangleSelection(this, e);
+                sequencer.ResetCaptureThreshold();
+            }
+        }
+        
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            UpdateRenderCoords();
+        }
+
+        protected override void OnRender(Graphics g)
+        {
+            if (Song == null || NoteSizeX <= 0.0f)
+                return;
+
+            var b = g.BackgroundCommandList;
+            var c = g.DefaultCommandList;
+            var f = g.ForegroundCommandList;
+            var minVisibleNoteIdx = Math.Max(GetNoteForPixel(0), 0);
+            var maxVisibleNoteIdx = Math.Min(GetNoteForPixel(Width) + 1, Song.GetPatternStartAbsoluteNoteIndex(Song.Length));
+            var minVisiblePattern = Utils.Clamp(Song.PatternIndexFromAbsoluteNoteIndex(minVisibleNoteIdx), 0, Song.Length);
+            var maxVisiblePattern = Utils.Clamp(Song.PatternIndexFromAbsoluteNoteIndex(maxVisibleNoteIdx) + 1, 0, Song.Length);
+
+            c.PushClipRegion(0, 0, Width, Height);
+
+            for (var i = minVisiblePattern; i < maxVisiblePattern; i++)
+            {
+                var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
+                var sx = GetPixelForNote(Song.GetPatternLength(i), false);
+                var color = (i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2;
+
+                b.FillRectangle(px, 0, px + sx, Height, color);
+            }
+
+            // Selection
+            var valid = HasSelection;
+
+            if (!sequencer.LegacySelectMode && sequencer.IsRectangleSelectionCapture && sequencer.CaptureSelectionMin.IsValid && sequencer.CaptureSelectionMax.IsValid)
+            {
+                var minRow = GetRowForChannel(sequencer.CaptureSelectionMin.ChannelIndex);
+                var maxRow = GetRowForChannel(sequencer.CaptureSelectionMax.ChannelIndex);
+
+                if (minRow >= 0 && maxRow >= 0)
+                {
+                    c.FillRectangle(
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(sequencer.CaptureSelectionMin.PatternIndex)), ChannelSizeY * minRow - ViewScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(sequencer.CaptureSelectionMax.PatternIndex + 1, Song.Length))), ChannelSizeY * (maxRow + 1) - ViewScrollY,
+                        SelectionColor);
+                }
+            }
+            else if (!LegacySelectMode && IsColumnSelectionCapture && CaptureSelectionMin.PatternIndex >= 0 && CaptureSelectionMax.PatternIndex >= 0)
+            {
+                var minPatternIdx = Math.Max(sequencer.CaptureSelectionMin.PatternIndex, minVisiblePattern);
+                var maxPatternIdx = Math.Min(sequencer.CaptureSelectionMax.PatternIndex, maxVisiblePattern - 1);
+
+                for (var patternIdx = minPatternIdx; patternIdx <= maxPatternIdx; patternIdx++)
+                {
+                    c.FillRectangle(
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(patternIdx)), 0,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(patternIdx + 1)), Height,
+                        SelectionColor);
+                }
+            }
+            else if (valid && LegacySelectMode)
+            {
+                if (IsTimeOnlySelection)
+                {
+                    c.FillRectangle(
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMin.PatternIndex,     Song.Length))), 0,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMax.PatternIndex + 1, Song.Length))), Height,
+                        SelectedPatternVisibleColor);
+                }
+                else if (sequencer.GetMinMaxSelectedRow(out var minSelRow, out var maxSelRow))
+                {
+                    c.FillRectangle(
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMin.PatternIndex,     Song.Length))), ChannelSizeY *  minSelRow      - ViewScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMax.PatternIndex + 1, Song.Length))), ChannelSizeY * (maxSelRow + 1) - ViewScrollY,
+                        SelectionColor);
+                }
+            }
+
+            // Vertical lines
+            for (int i = Math.Max(1, minVisiblePattern); i <= maxVisiblePattern; i++)
+            {
+                var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
+                c.DrawLine(px, 0, px, Height, Theme.BlackColor);
+            }
+
+            c.PushTranslation(0, -ViewScrollY);
+
+            // Horizontal lines
+            for (int i = 0, y = 0; i <= VisibleRowCount; i++, y += ChannelSizeY)
+                c.DrawLine(0, y, Width, y, Theme.BlackColor);
+
+            // TODO : This is really bad, since all the logic is in the rendering code. Make
+            // this more like any other capture op eventually.
+            var dragCapture = IsDragSelectionCapture;
+            if (dragCapture)
+            {
+                var pt = new Point(mousePosition.X, mousePosition.Y);
+                var noteIdx = GetNoteForPixel(pt.X);
+
+                if (noteIdx >= 0 &&
+                    noteIdx < Song.GetPatternStartAbsoluteNoteIndex(Song.Length))
+                {
+                    var patternIdx = Song.PatternIndexFromAbsoluteNoteIndex(noteIdx);
+                    var patternIdxDelta = patternIdx - SelectionDragAnchorPatternIdx;
+                    var seqPt = sequencer.WindowToControl(ControlToWindow(pt));
+                    var rowIdxDelta = sequencer.GetDragSelectionRowDelta(seqPt.Y);
+
+                    var instance = ModifierKeys.IsControlDown;
+                    var duplicate = instance && ModifierKeys.IsShiftDown;
+
+                    var bmpCopy = (TextureAtlasRef)null;
+                    var bmpSize = DpiScaling.ScaleCustom(bmpDuplicate.ElementSize.Width, bitmapScale);
+
+                    if (rowIdxDelta != 0)
+                        bmpCopy = (duplicate || instance) ? bmpDuplicate : bmpDuplicateMove;
+                    else
+                        bmpCopy = duplicate ? bmpDuplicate : (instance ? bmpMenuInstance : null);
+
+                    if (LegacySelectMode)
+                    {
+                        if (sequencer.GetMinMaxSelectedRow(out var minSelRow, out var maxSelRow))
+                        {
+                            for (int j = minSelRow + rowIdxDelta; j <= maxSelRow + rowIdxDelta; j++)
+                            {
+                                if (j < 0 || j >= VisibleRowCount)
+                                    continue;
+
+                                var y = j * ChannelSizeY;
+
+                                // Center.
+                                var patternSizeX = GetPixelForNote(Song.GetPatternLength(patternIdx), false);
+                                var anchorOffsetLeftX = (int)(patternSizeX * SelectionDragAnchorPatternXFraction);
+                                var anchorOffsetRightX = (int)(patternSizeX * (1.0f - SelectionDragAnchorPatternXFraction));
+
+                                c.PushTranslation(pt.X, y);
+                                c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+
+                                if (bmpCopy != null)
+                                    c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+
+                                // Left side
+                                for (int p = patternIdx - 1; p >= SelectionMin.PatternIndex + patternIdxDelta && p >= 0; p--)
+                                {
+                                    patternSizeX = GetPixelForNote(Song.GetPatternLength(p), false);
+                                    anchorOffsetLeftX += patternSizeX;
+
+                                    c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+
+                                    if (bmpCopy != null)
+                                        c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                }
+
+                                // Right side
+                                for (int p = patternIdx + 1; p <= SelectionMax.PatternIndex + patternIdxDelta && p < Song.Length; p++)
+                                {
+                                    patternSizeX = GetPixelForNote(Song.GetPatternLength(p), false);
+
+                                    c.FillAndDrawRectangle(anchorOffsetRightX, 0, anchorOffsetRightX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+
+                                    if (bmpCopy != null)
+                                        c.DrawTextureAtlas(bmpCopy, anchorOffsetRightX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+
+                                    anchorOffsetRightX += patternSizeX;
+                                }
+
+                                c.PopTransform();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var anchorPatternSizeX = GetPixelForNote(Song.GetPatternLength(patternIdx), false);
+                        var anchorOffsetLeftX  = (int)(anchorPatternSizeX * SelectionDragAnchorPatternXFraction);
+                        var anchorX = pt.X - anchorOffsetLeftX;
+                        var anchorGridX = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(patternIdx));
+
+                        foreach (var location in SelectedPatternLocations)
+                        {
+                            // Safety: modern selection/preview only applies to real patterns.
+                            if (Song.GetPatternInstance(location) == null)
+                                continue;
+
+                            var sourceRow = GetRowForChannel(location.ChannelIndex);
+                            if (sourceRow < 0)
+                                continue;
+
+                            var destRow = sourceRow + rowIdxDelta;
+                            var destPattern = location.PatternIndex + patternIdxDelta;
+
+                            if (destRow < 0 || destRow >= VisibleRowCount || destPattern < 0 || destPattern >= Song.Length)
+                                continue;
+
+                            var destGridX    = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(destPattern));
+                            var patternSizeX = GetPixelForNote(Song.GetPatternLength(destPattern), false);
+
+                            var x = anchorX + (destGridX - anchorGridX);
+                            var y = destRow * ChannelSizeY;
+
+                            c.FillAndDrawRectangle(x, y, x + patternSizeX, y + ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+
+                            if (bmpCopy != null)
+                            {
+                                c.DrawTextureAtlas(bmpCopy, x + patternSizeX / 2 - bmpSize / 2, y + PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Patterns
+            var patternCacheSizeY = ChannelSizeY - PatternHeaderSizeY - 1;
+            patternCache.Update(patternCacheSizeY);
+
+            for (int pi = minVisiblePattern; pi < maxVisiblePattern; pi++)
+            {
+                var patternLen = Song.GetPatternLength(pi);
+                var noteLen = Song.UsesFamiTrackerTempo ? 1 : Song.GetPatternNoteLength(pi);
+                var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(pi));
+                var sx = GetPixelForNote(patternLen, false);
+
+                c.PushTranslation(px, 0);
+
+                // TODO : Dont draw channels that are not visible!
+                for (int ci = 0, py = 0; ci < Song.Channels.Length; ci++)
+                {
+                    if (sequencer.IsChannelVisible(ci))
+                    {
+                        var location = new PatternLocation(ci, pi);
+                        var pattern  = Song.GetPatternInstance(location);
+                        if (pattern != null)
+                        {
+                            var bmp          = patternCache.GetOrAddPattern(pattern, patternLen, noteLen, out var u0, out var v0, out var u1, out var v1);
+                            var isSelected   = sequencer.IsPatternSelected(location);
+                            var newSelection = isSelected && !LegacySelectMode;
+                            var count        = sequencer.GetSelectedPatternRefCount(pattern);
+
+                            c.PushTranslation(0, py);
+                            c.FillRectangleGradient(1, 1, sx, PatternHeaderSizeY, pattern.Color, pattern.Color.Scaled(0.8f), true, PatternHeaderSizeY);
+                            c.FillRectangle(1, PatternHeaderSizeY, sx, ChannelSizeY, Color.FromArgb(75, pattern.Color));
+                            c.DrawLine(0, PatternHeaderSizeY, sx, PatternHeaderSizeY, newSelection ? Theme.WhiteColor : Theme.BlackColor);
+                            c.DrawTexture(bmp, 1.0f, 1.0f + PatternHeaderSizeY, sx - 1, patternCacheSizeY, u0, v0, u1, v1);
+
+                            if (isSelected)
+                            {
+                                if (!LegacySelectMode)
+                                {
+                                    c.DrawText(pattern.Name, Fonts.FontSmallBold, PatternNamePosX + 1, 1, Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - PatternNamePosX, PatternHeaderSizeY + 1);
+                                    f.FillRectangle(1, PatternHeaderSizeY, sx, ChannelSizeY, HighlightedPatternColor);
+                                }
+                                    
+                                f.DrawRectangle(0, 0, sx, ChannelSizeY, LegacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor, 3, true, true);
+                            }
+
+                            c.DrawText(pattern.Name, newSelection ? Fonts.FontSmallBold : Fonts.FontSmall, PatternNamePosX, 0, newSelection ? Theme.WhiteColor : Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - PatternNamePosX, PatternHeaderSizeY + 1);
+                            c.PopTransform();
+
+                            if (!dragCapture && valid && count > 1)
+                            {
+                                // TODO: Use correct icon for mobile in place of original instantiate one, rather than resizing.
+                                var scale   = bitmapScale / (Platform.IsMobile ? 4 : 1);
+                                var bmpSize = DpiScaling.ScaleCustom(bmpMenuInstance.ElementSize.Width, scale);
+
+                                f.PushTranslation(0, py);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2 + scale, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2 + scale, scale, Theme.BlackColor);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, scale, Theme.WhiteColor);
+                                f.PopTransform();
+                            }
+                        }
+
+                        if (Platform.IsMobile && HighlightLocation == location)
+                        {
+                            c.DrawRectangle(0, py, sx, py + ChannelSizeY, Theme.WhiteColor, 3, true, true);
+                        }
+
+                        py += ChannelSizeY;
+                    }
+                }
+
+                c.PopTransform();
+            }
+
+            // Piano roll view rect
+            if (App.GetPianoRollViewRange(out var pianoRollMinNoteIdx, out var pianoRollMaxNoteIdx, out var pianoRollChannelIndex))
+            {
+                var rowIdx = GetRowForChannel(pianoRollChannelIndex);
+                if (rowIdx >= 0)
+                {
+                    c.PushTranslation(GetPixelForNote(pianoRollMinNoteIdx), rowIdx * ChannelSizeY);
+                    c.DrawRectangle(1, PatternHeaderSizeY + 1, GetPixelForNote(pianoRollMaxNoteIdx - pianoRollMinNoteIdx, false) - 1, ChannelSizeY - 1, Theme.LightGreyColor2);
+                    c.PopTransform();
+                }
+            }
+
+            // Seek bar
+            var seekX = GetPixelForNote(sequencer.SeekFrameToDraw);
+            b.DrawLine(seekX, 0, seekX, Height, sequencer.SeekBarColor, 3);
+
+            c.PopTransform();
+            c.PopClipRegion();
+        }
+    }
+}

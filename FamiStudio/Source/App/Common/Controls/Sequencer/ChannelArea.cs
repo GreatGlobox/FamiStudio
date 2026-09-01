@@ -18,6 +18,7 @@ namespace FamiStudio
         private Song Song => App.SelectedSong;
 
         internal bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
+        internal LocalizedString MoreOptionsText => sequencer.MoreOptionsText;
 
         public bool HideEmptyChannels
         {
@@ -59,9 +60,12 @@ namespace FamiStudio
 
         public event Action ShyClicked;
 
+        LocalizedString ShyModeTooltip;
+
         internal ChannelArea(Sequencer sequencer)
         {
             this.sequencer = sequencer;
+            Localization.Localize(this);
         }
 
         protected override void OnAddedToContainer()
@@ -71,7 +75,8 @@ namespace FamiStudio
             shyButton = new Button("ShyOff")
             {
                 Transparent = true,
-                ImageScale = headerIconScale
+                ImageScale = headerIconScale,
+                ToolTip = $"<MouseLeft> {ShyModeTooltip}"
             };
 
             shyButton.ImageEvent += ShyButton_ImageEvent;
@@ -270,12 +275,17 @@ namespace FamiStudio
             LocalizedString SoloChannelTooltip;
             LocalizedString ForceDisplayTooltip;
             LocalizedString ForceDisplayAllChannelsTooltip;
+            LocalizedString MakeActiveTooltip;
+            LocalizedString ToggleMuteLabel;
+            LocalizedString ToggleSoloLabel;
+            LocalizedString ForceDisplayLabel;
 
             public ChannelRow(ChannelArea channelArea, int channelIdx)
             {
                 this.channelArea = channelArea;
                 Localization.Localize(this);
                 ChannelIndex = channelIdx;
+                UpdateToolTip();
             }
 
             protected override void OnAddedToContainer()
@@ -299,10 +309,53 @@ namespace FamiStudio
                 forceDisplayButton.DimmedEvent += ForceDisplayButton_DimmedEvent;
 
                 channelButton.ToolTip      = $"<MouseLeft> {MuteChannelTooltip} - <MouseLeft><MouseLeft> {SoloChannelTooltip}";
-                forceDisplayButton.ToolTip = $"<MouseLeft> {ForceDisplayTooltip}\n<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
+                //forceDisplayButton.ToolTip = $"<MouseLeft> {ForceDisplayTooltip}\n<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
+
+                UpdateForceDisplayToolTip();
 
                 AddControl(channelButton);
                 AddControl(forceDisplayButton);
+            }
+
+            private void UpdateToolTip()
+            {
+                var tooltip = $"<MouseLeft> {MakeActiveTooltip}";
+
+                if (ChannelIndex >= 0 && ChannelIndex < Settings.ActiveChannelShortcuts.Length)
+                {
+                    tooltip += $" {Settings.ActiveChannelShortcuts[ChannelIndex].TooltipString}";
+                }
+
+                tooltip += $" - <MouseRight> {channelArea.MoreOptionsText}";
+
+                ToolTip = tooltip;
+            }
+
+            private void UpdateForceDisplayToolTip()
+            {
+                var tooltip =
+                    $"<MouseLeft> {ForceDisplayTooltip}\n" +
+                    $"<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
+
+                if (ChannelIndex >= 0 &&
+                    ChannelIndex < Settings.DisplayChannelShortcuts.Length)
+                {
+                    tooltip += $" {Settings.DisplayChannelShortcuts[ChannelIndex].TooltipString}";
+                }
+
+                forceDisplayButton.ToolTip = tooltip;
+            }
+
+            private void ShowContextMenu()
+            {
+                var channelIdx = ChannelIndex;
+
+                App.ShowContextMenuAsync(new[]
+                {
+                    new ContextMenuOption("MenuMute", ToggleMuteLabel, () => App.ToggleChannelActive(channelIdx)),
+                    new ContextMenuOption("MenuSolo", ToggleSoloLabel, () => App.ToggleChannelSolo(channelIdx)),
+                    new ContextMenuOption("MenuForceDisplay", ForceDisplayLabel, () => App.ToggleChannelForceDisplay(channelIdx))
+                });
             }
 
             private string ChannelButton_ImageEvent(Control sender, ref Color tint)
@@ -321,6 +374,28 @@ namespace FamiStudio
             {
                 dimming = 50;
                 return (App.ForceDisplayChannelMask & (1L << ChannelIndex)) == 0;
+            }
+
+            protected override void OnPointerUp(PointerEventArgs e)
+            {
+                base.OnPointerUp(e);
+
+                if (e.Right)
+                {
+                    hovered = false;
+                    ShowContextMenu();
+                }
+            }
+
+            public override void OnContainerPointerUpNotify(Control control, PointerEventArgs e)
+            {
+                base.OnContainerPointerUpNotify(control, e);
+
+                if (e.Right)
+                {
+                    hovered = false;
+                    ShowContextMenu();
+                }
             }
 
             protected override void OnResize(EventArgs e)

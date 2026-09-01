@@ -172,6 +172,7 @@
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\SimpleTab.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\ProjectExplorer.cs" />
     <Compile Include="Source\App\Common\Controls\Sequencer\ChannelArea.cs" />
+    <Compile Include="Source\App\Common\Controls\Sequencer\PatternArea.cs" />
     <Compile Include="Source\App\Common\Controls\Sequencer\Sequencer.cs" />
     <Compile Include="Source\App\Common\Controls\Sequencer\Timeline.cs" />
     <Compile Include="Source\App\Common\Controls\Toolbar\Oscilloscope.cs" />
