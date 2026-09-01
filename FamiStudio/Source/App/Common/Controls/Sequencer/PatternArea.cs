@@ -177,6 +177,37 @@ namespace FamiStudio
             return (int)(x / (double)NoteSizeX);
         }
 
+        private int GetPatternIndexForCoord(int x)
+        {
+            var note = GetNoteForPixel(x);
+            return Utils.Clamp(Song.PatternIndexFromAbsoluteNoteIndex(note), 0, Song.Length - 1);
+        }
+
+        internal bool GetPatternForCoord(int x, int y, out PatternLocation location)
+        {
+            var noteIdx = GetNoteForPixel(x);
+
+            if (noteIdx < 0 || noteIdx >= Song.GetPatternStartAbsoluteNoteIndex(Song.Length))
+            {
+                location = PatternLocation.Invalid;
+                return false;
+            }
+
+            var channelIdx = sequencer.GetChannelIndexForCoord(y + sequencer.HeaderSizeY);
+
+            if (channelIdx < 0)
+            {
+                location = PatternLocation.Invalid;
+                return false;
+            }
+
+            location = new PatternLocation(
+                channelIdx,
+                Song.PatternIndexFromAbsoluteNoteIndex(noteIdx));
+
+            return true;
+        }
+
         private void ShowContextMenu(PatternLocation location, int x, int y)
         {
             var pattern = Song.GetPatternInstance(location);
@@ -267,43 +298,17 @@ namespace FamiStudio
             {
                 if (sequencer.SelectedPatternsHaveSharedReferences())
                 {
-                    menu.Insert(1, new ContextMenuOption(
-                        "MenuUnlink",
-                        MakePatternsUniqueLabel,
-                        () => sequencer.MakeSelectedPatternsUnique()));
+                    menu.Insert(1, new ContextMenuOption("MenuUnlink", MakePatternsUniqueLabel, () => sequencer.MakeSelectedPatternsUnique()));
                 }
 
                 if (sequencer.SelectionContainsMultiplePatterns())
                 {
-                    menu.Insert(1, new ContextMenuOption(
-                        "MenuInstance",
-                        MergeIdenticalPatternsLabel,
-                        () => sequencer.MergeSelectedIdenticalPatterns()));
+                    menu.Insert(1, new ContextMenuOption("MenuInstance",MergeIdenticalPatternsLabel, () => sequencer.MergeSelectedIdenticalPatterns()));
                 }
             }
 
             if (menu.Count > 0)
                 App.ShowContextMenuAsync(menu.ToArray());
-        }
-
-        internal bool GetPatternForCoord(int x, int y, out PatternLocation location)
-        {
-            var noteIdx = GetNoteForPixel(x);
-            if (noteIdx < 0 || noteIdx >= Song.GetPatternStartAbsoluteNoteIndex(Song.Length))
-            {
-                location = PatternLocation.Invalid;
-                return false;
-            }
-
-            var channelIdx = sequencer.GetChannelIndexForCoord(y + sequencer.HeaderSizeY);
-            if (channelIdx < 0)
-            {
-                location = PatternLocation.Invalid;
-                return false;
-            }
-
-            location = new PatternLocation(channelIdx, Song.PatternIndexFromAbsoluteNoteIndex(noteIdx));
-            return true;
         }
 
         internal void NotifyPatternChange(Pattern pattern)
@@ -330,27 +335,67 @@ namespace FamiStudio
             mousePosition = e.Position;
 
             base.OnPointerMove(e);
-
             UpdateToolTip(e);
-            sequencer.PatternAreaPointerMove(e);
+
+            var patternIdx = GetPatternIndexForCoord(e.X);
+            var rowIdx = (e.Y + ViewScrollY) / ChannelSizeY;
+
+            if (rowIdx < 0 || rowIdx >= VisibleRowCount)
+                rowIdx = -1;
+
+            sequencer.SetPatternAreaHover(rowIdx, patternIdx);
+
+            var p = sequencer.WindowToControl(ControlToWindow(e.Position));
+            sequencer.UpdatePointerCapture(p.X, p.Y);
+            sequencer.ShowExpansionIcons = false;
         }
 
         protected override void OnPointerDown(PointerEventArgs e)
         {
-            if (!e.IsTouchEvent && e.Right && GetPatternForCoord(e.X, e.Y, out _))
-            {
-                e.DelayRightClick();
-            }
-
             base.OnPointerDown(e);
 
             if (e.IsTouchEvent)
                 return;
 
-            sequencer.PatternAreaPointerDown(e);
+            if (!GetPatternForCoord(e.X, e.Y, out var location))
+                return;
 
-            if (e.Left && sequencer.HasCaptureOperation)
-                CapturePointer();
+            if (e.Right)
+            {
+                if (ModifierKeys.IsAltDown && Settings.AltZoomAllowed)
+                {
+                    sequencer.StartAltZoom(this, e);
+                }
+                else
+                {
+                    e.DelayRightClick();
+                }
+
+                return;
+            }
+
+            if (!e.Left)
+                return;
+
+            var pattern = Song.GetPatternInstance(location);
+
+            if (pattern == null)
+            {
+                sequencer.CreateNewPattern(location);
+            }
+            else if (ModifierKeys.IsShiftDown && !ModifierKeys.IsControlDown)
+            {
+                sequencer.DeletePattern(location);
+            }
+            else
+            {
+                sequencer.NotifyPatternClicked(location);
+
+                if (!sequencer.IsPatternSelected(location))
+                    sequencer.SetSelection(location, location);
+
+                sequencer.StartDragSelection(this, e, location.PatternIndex);
+            }
         }
 
         protected override void OnPointerUp(PointerEventArgs e)
@@ -365,11 +410,13 @@ namespace FamiStudio
                     ShowContextMenu(location, e.X, e.Y);
             }
 
-            sequencer.PatternAreaPointerUp(e);
+            if (sequencer.HasCaptureOperation)
+            {
+                var p = sequencer.WindowToControl(ControlToWindow(e.Position));
+                sequencer.EndCaptureOperation(p.X, p.Y);
+            }
 
-            if (!selection &&
-                e.Right &&
-                GetPatternForCoord(e.X, e.Y, out var rightClickLocation))
+            if (!selection && e.Right && GetPatternForCoord(e.X, e.Y, out var rightClickLocation))
             {
                 ShowContextMenu(rightClickLocation, e.X, e.Y);
             }
@@ -382,7 +429,7 @@ namespace FamiStudio
             if (e.Right)
             {
                 CapturePointer();
-                sequencer.PatternAreaPointerDownDelayed(e);
+                sequencer.StartRectangleSelection(this, e);
             }
         }
 

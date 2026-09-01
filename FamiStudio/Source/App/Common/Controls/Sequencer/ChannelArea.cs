@@ -197,6 +197,30 @@ namespace FamiStudio
             }
         }
 
+        public override void OnContainerPointerMoveNotify(Control control, PointerEventArgs e)
+        {
+            base.OnContainerPointerMoveNotify(control, e);
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var row = rows[i];
+
+                if (control == row || control.IsInContainer(row))
+                {
+                    sequencer.SetChannelHover(channelToRow[i]);
+                    return;
+                }
+            }
+
+            sequencer.ClearHover();
+        }
+
+        protected override void OnPointerMove(PointerEventArgs e)
+        {
+            base.OnPointerMove(e);
+            sequencer.ClearHover();
+        }
+
         protected override void OnRender(Graphics g)
         {
             ConditionalUpdateRowScroll();

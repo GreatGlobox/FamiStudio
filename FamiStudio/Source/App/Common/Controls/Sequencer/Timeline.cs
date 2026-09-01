@@ -201,6 +201,12 @@ namespace FamiStudio
                 App.SeekSong(GetNoteForPixel(e.X));
         }
 
+        protected override void OnPointerMove(PointerEventArgs e)
+        {
+            base.OnPointerMove(e);
+            sequencer.SetTimelineHover(GetPatternIndexForCoord(e.X));
+        }
+
         protected override void OnTouchLongPress(PointerEventArgs e)
         {
             var x = e.X;

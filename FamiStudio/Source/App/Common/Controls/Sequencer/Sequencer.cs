@@ -90,10 +90,6 @@ namespace FamiStudio
         HashSet<int> selectedPatternColumns = [];
         HashSet<int> captureSelectedPatternColumns = [];
 
-        // Hover tracking
-        int hoverRow = -1;
-        int hoverPattern = -1;
-
         Color selectedPatternVisibleColor   = Color.FromArgb(64, Theme.LightGreyColor1);
         Color selectedPatternInvisibleColor = Color.FromArgb(16, Theme.LightGreyColor1);
         Color highlightedPatternColor       = Color.FromArgb(64, Theme.WhiteColor);
@@ -416,16 +412,6 @@ namespace FamiStudio
             channelArea.RecreateRows(channelBitmapScale);
         }
 
-        private void UpdateChannelRowHover()
-        {
-            channelArea.SetHover(hoverRow);
-        }
-
-        private void UpdateTimelineHover()
-        {
-            timeline.SetHoverPattern(hoverPattern);
-        }
-
         private void UpdateChannelRowLayout()
         {
             channelArea.Resize(channelNameSizeX, ContentBottomY);
@@ -464,8 +450,8 @@ namespace FamiStudio
             {
                 control.CapturePointer();
 
-                e = ControlToSequencerPointerEvent(control, e);
-                HandleMouseDownPan(e, false);
+                var p = WindowToControl(control.ControlToWindow(e.Position));
+                StartPan(p.X, p.Y, false);
             }
         }
 
@@ -479,13 +465,15 @@ namespace FamiStudio
             if (panning)
                 DoScroll(p.X - mouseLastX, p.Y - mouseLastY);
 
-            if (control == timeline && captureOperation == CaptureOperation.SelectColumn)
+            if (control == timeline &&
+                captureOperation == CaptureOperation.SelectColumn)
+            {
                 UpdateCaptureOperation(p.X, p.Y);
+            }
 
             UpdateChildToolTip(control);
 
             SetMouseLastPos(p.X, p.Y);
-            UpdateHover(p.X, p.Y);
             UpdateCursor();
         }
 
@@ -840,36 +828,6 @@ namespace FamiStudio
             }
         }
 
-        protected void RenderChannelNameArea(Graphics g)
-        {
-            var c = g.DefaultCommandList;
-
-            // Background for header.
-            c.FillRectangle(0, 0, channelNameSizeX, height, Theme.DarkGreyColor2);
-
-            // Outer/right boundaries.
-            c.DrawLine(channelNameSizeX - 1, 0, channelNameSizeX - 1, height, Theme.BlackColor);
-            c.DrawLine(0, 0, channelNameSizeX, 0, Theme.BlackColor);
-            c.DrawLine(0, height - scrollBarThickness, channelNameSizeX, height - scrollBarThickness, Theme.BlackColor);
-            c.DrawLine(0, height - 1, channelNameSizeX, height - 1, Theme.BlackColor);
-
-            // Header boundary.
-            c.DrawLine(0, headerSizeY, channelNameSizeX, headerSizeY, Theme.BlackColor);
-
-            if (Platform.IsMobile && IsLandscape)
-                c.DrawLine(0, 0, 0, height, Theme.BlackColor);
-        }
-
-        protected void RenderDebug(Graphics g)
-        {
-#if DEBUG
-            if (Platform.IsMobile)
-            {
-                g.OverlayCommandList.FillRectangle(mouseLastX - 30, mouseLastY - 30, mouseLastX + 30, mouseLastY + 30, Theme.WhiteColor);
-            }
-#endif
-        }
-
         private void RenderScrollBars(Graphics g)
         {
             if (scrollBarThickness == 0)
@@ -912,6 +870,16 @@ namespace FamiStudio
             c.FillRectangle(0, topY, width, height, Theme.Darken(Theme.DarkGreyColor1, 5));
             c.DrawLine(0, topY, width, topY, Theme.BlackColor);
             c.DrawLine(0, height - 1, width, height - 1, Theme.BlackColor);
+        }
+
+        protected void RenderDebug(Graphics g)
+        {
+#if DEBUG
+            if (Platform.IsMobile)
+            {
+                g.OverlayCommandList.FillRectangle(mouseLastX - 30, mouseLastY - 30, mouseLastX + 30, mouseLastY + 30, Theme.WhiteColor);
+            }
+#endif
         }
 
         protected override void OnRender(Graphics g)
@@ -1181,19 +1149,6 @@ namespace FamiStudio
             GetClampedPatternForCoord(x, y, out captureChannelIdx, out capturePatternIdx);
         }
 
-        private void SetSelectedChannel(int idx)
-        {
-            if (idx != App.SelectedChannelIndex)
-                App.SelectedChannelIndex = idx;
-        }
-
-        private void ChangeChannelForCoord(int y)
-        {
-            var channelIdx = GetChannelIndexForCoord(y);
-            if (channelIdx >= 0)
-                SetSelectedChannel(channelIdx);
-        }
-
         internal void CreateNewPattern(PatternLocation location)
         {
             var channel = Song.Channels[location.ChannelIndex];
@@ -1243,23 +1198,10 @@ namespace FamiStudio
             EditPatternCustomSettings(p, patternIdx);
         }
 
-        private bool HandleMouseDownPan(PointerEventArgs e, bool capturePointer = true)
+        private void StartPan(int x, int y, bool capturePointer = true)
         {
-            var x = e.X;
-            var y = e.Y;
-
-            var middle =
-                e.Middle ||
-                (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle);
-
-            if (middle)
-            {
-                panning = true;
-                CaptureMouse(x, y, capturePointer);
-                return true;
-            }
-
-            return false;
+            panning = true;
+            CaptureMouse(x, y, capturePointer);
         }
 
         private bool HandleMouseDownScrollbar(PointerEventArgs e)
@@ -1314,17 +1256,6 @@ namespace FamiStudio
             return false;
         }
 
-        private bool HandleMouseDownAltZoom(PointerEventArgs e, bool capturePointer = true)
-        {
-            if (e.Right && ModifierKeys.IsAltDown && Settings.AltZoomAllowed && GetPatternForCoord(e.X, e.Y, out _))
-            {
-                StartCaptureOperation(e.X, e.Y, CaptureOperation.AltZoom, capturePointer);
-                return true;
-            }
-
-            return false;
-        }
-
         private void HandleMouseWheel(int x, PointerEventArgs e)
         {
             if (Settings.TrackPadControls && !ModifierKeys.IsControlDown && !ModifierKeys.IsAltDown)
@@ -1355,6 +1286,12 @@ namespace FamiStudio
             ClampScroll();
             MarkDirty();
         }
+
+        internal void StartDragSelection(Control control, PointerEventArgs e, int patternIdx)
+        {
+            var p = WindowToControl(control.ControlToWindow(e.Position));
+            StartDragSelection(p.X, p.Y, patternIdx, false);
+        }
         
         private void StartDragSelection(int x, int y, int patternIdx, bool capturePointer = true)
         {
@@ -1367,62 +1304,12 @@ namespace FamiStudio
             StartCaptureOperation(x, y, CaptureOperation.DragSelection, capturePointer);
         }
 
-        private bool HandleMouseDownPatternArea(PointerEventArgs e, bool capturePointer = true)
-        {
-            bool inPatternZone = GetPatternForCoord(e.X, e.Y, out var location);
-
-            if (inPatternZone)
-            {
-                var pattern = Song.GetPatternInstance(location);
-
-                if (e.Left)
-                {
-                    if (pattern == null)
-                    {
-                        CreateNewPattern(location);
-                    }
-                    else
-                    {
-                        if (pattern != null)
-                        {
-                            if (ModifierKeys.IsShiftDown && !ModifierKeys.IsControlDown)
-                            {
-                                DeletePattern(location);
-                                return true;
-                            }
-
-                            PatternClicked?.Invoke(location.ChannelIndex, location.PatternIndex, false);
-                        }
-
-                        if (!IsPatternSelected(location))
-                        {
-                            SetSelection(location, location);
-                        }
-
-                        StartDragSelection(e.X, e.Y, location.PatternIndex, capturePointer);
-                    }
-
-                    return true;
-                }
-                else if (e.Right)
-                {
-                    e.DelayRightClick(); // Need to wait to see difference between context menu or selection.
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private bool HandleMouseDownResize(PointerEventArgs e)
         {
             captureSequencerHeight = height;
 
             if (e.Left && IsPointInResizeArea(e.Y))
             {
-                hoverRow = -1;
-                UpdateChannelRowHover();
-
                 StartCaptureOperation(e.X, e.Y, CaptureOperation.ResizeSequencer);
                 return true;
             }
@@ -1437,7 +1324,14 @@ namespace FamiStudio
 
             UpdateCursor();
 
-            if (HandleMouseDownPan(e, false)) goto Handled;
+            var pan = e.Middle || (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle);
+            if (pan)
+            {
+                StartPan(e.X, e.Y, false);
+                MarkDirty();
+                return;
+            }
+
             if (HandleMouseDownResize(e)) goto Handled;
             if (HandleMouseDownScrollbar(e)) goto Handled;
 
@@ -2202,30 +2096,40 @@ namespace FamiStudio
             }
         }
 
-        private void EndCaptureOperation(int x, int y)
+        internal void EndCaptureOperation(int x, int y)
         {
-            if (captureOperation != CaptureOperation.None)
+            if (captureOperation == CaptureOperation.None)
+                return;
+
+            var operation = captureOperation;
+
+            switch (operation)
             {
-                switch (captureOperation)
-                {
-                    case CaptureOperation.DragSelection:
-                        EndDragSelection(x, y);
-                        break;
-                    case CaptureOperation.DragSeekBar:
-                        UpdateSeekDrag(x, y, true);
-                        break;
-                    case CaptureOperation.MobilePan:
-                    case CaptureOperation.MobileZoom:
-                        canFling = true;
-                        break;
+                case CaptureOperation.DragSelection:
+                    EndDragSelection(x, y);
+                    break;
 
-                }
+                case CaptureOperation.DragSeekBar:
+                    UpdateSeekDrag(x, y, true);
+                    break;
 
-                panning = false;
-                captureOperation = CaptureOperation.None;
-                ReleasePointer();
-                MarkDirty();
+                case CaptureOperation.MobilePan:
+                case CaptureOperation.MobileZoom:
+                    canFling = true;
+                    break;
             }
+
+            panning = false;
+            captureOperation = CaptureOperation.None;
+            ReleasePointer();
+
+            if ((operation == CaptureOperation.SelectRectangle || operation == CaptureOperation.SelectColumn) && IsSelectionValid())
+            {
+                UpdateSelectedPatternRefCounts();
+            }
+
+            MarkDirty();
+            UpdateCursor();
         }
 
         protected override void OnPointerUp(PointerEventArgs e)
@@ -2629,90 +2533,15 @@ namespace FamiStudio
             }
         }
 
-        private PointerEventArgs ControlToSequencerPointerEvent(Control control, PointerEventArgs e)
+        internal void NotifyPatternClicked(PatternLocation location)
         {
-            var buttons = 0;
+            PatternClicked?.Invoke(location.ChannelIndex, location.PatternIndex, false);
+        }
 
-            if (e.Left)
-                buttons |= PointerEventArgs.ButtonLeft;
-
-            if (e.Middle)
-                buttons |= PointerEventArgs.ButtonMiddle;
-
-            if (e.Right)
-                buttons |= PointerEventArgs.ButtonRight;
-
+        internal void StartAltZoom(Control control, PointerEventArgs e)
+        {
             var p = WindowToControl(control.ControlToWindow(e.Position));
-            return new PointerEventArgs(buttons, p.X, p.Y, e.IsTouchEvent, e.ScrollX, e.ScrollY);
-        }
-
-        internal void PatternAreaPointerDown(PointerEventArgs e)
-        {
-            e = ControlToSequencerPointerEvent(patternArea, e);
-
-            if (captureOperation != CaptureOperation.None && (e.Left || e.Right))
-                return;
-
-            UpdateCursor();
-
-            if (HandleMouseDownAltZoom(e, false)) goto Handled;
-            if (HandleMouseDownPatternArea(e, false)) goto Handled;
-
-            return;
-
-        Handled:
-            MarkDirty();
-        }
-
-        internal void PatternAreaPointerDownDelayed(PointerEventArgs e)
-        {
-            var p = WindowToControl(patternArea.ControlToWindow(e.Position));
-
-            if (e.Right)
-            {
-                StartRectangleSelection(p.X, p.Y, false);
-                MarkDirty();
-            }
-        }
-
-        internal void PatternAreaPointerUp(PointerEventArgs e)
-        {
-            var p = WindowToControl(patternArea.ControlToWindow(e.Position));
-
-        if (panning)
-        {
-            panning = false;
-            UpdateCursor();
-            return;
-        }
-
-            if (captureOperation != CaptureOperation.None)
-            {
-                EndCaptureOperation(p.X, p.Y);
-
-                if (e.Right && IsSelectionValid())
-                    UpdateSelectedPatternRefCounts();
-            }
-
-            UpdateCursor();
-        }
-
-        internal void PatternAreaPointerMove(PointerEventArgs e)
-        {
-            var p = WindowToControl(patternArea.ControlToWindow(e.Position));
-            var x = p.X;
-            var y = p.Y;
-
-            UpdateCaptureOperation(x, y);
-
-            if (panning)
-                DoScroll(x - mouseLastX, y - mouseLastY);
-
-            UpdateHover(x, y);
-            SetMouseLastPos(x, y);
-            UpdateCursor();
-
-            ShowExpansionIcons = false;
+            StartCaptureOperation(p.X, p.Y, CaptureOperation.AltZoom, false);
         }
 
         internal void ResetCaptureThreshold()
@@ -2766,6 +2595,17 @@ namespace FamiStudio
         {
             GetMinMaxScroll(out _, out _, out var minScrollY, out var maxScrollY);
             return minScrollY != maxScrollY;
+        }
+
+        internal void UpdatePointerCapture(int x, int y)
+        {
+            UpdateCaptureOperation(x, y);
+
+            if (panning)
+                DoScroll(x - mouseLastX, y - mouseLastY);
+
+            SetMouseLastPos(x, y);
+            UpdateCursor();
         }
 
         private void UpdateCaptureOperation(int x, int y, float scale = 1.0f, bool realTime = false)
@@ -2847,50 +2687,49 @@ namespace FamiStudio
             else if (e.Right && patternRefCounts.Count > 0 && (captureOperation == CaptureOperation.SelectRectangle || captureOperation == CaptureOperation.SelectColumn))
                 patternRefCounts.Clear();
 
-            UpdateHover(x, y);
+            ClearHover();
             SetMouseLastPos(x, y);
             UpdateTooltip();
             UpdateCursor();
         }
 
-        private void UpdateHover(int x, int y)
+        internal void SetPatternAreaHover(int rowIdx, int patternIdx)
         {
             if (!Platform.IsDesktop)
                 return;
 
-            var oldRow = hoverRow;
-
             if (captureOperation == CaptureOperation.ResizeSequencer)
-            {
-                hoverRow = -1;
-            }
-            else
-            {
-                var localY = y - headerSizeY + scrollY;
-                var maxY   = rowToChannel.Length * channelSizeY;
+                rowIdx = -1;
 
-                hoverRow = y > headerSizeY && y < height && localY >= 0 && localY < maxY ? localY / channelSizeY : -1;
-            }
-
-            if (hoverRow != oldRow)
-                UpdateChannelRowHover();
-
-            var newHoverPattern = GetPatternIndexForCoord(x);
-
-            if (SetAndMarkDirty(ref hoverPattern, newHoverPattern))
-                UpdateTimelineHover();
+            channelArea.SetHover(rowIdx);
+            timeline.SetHoverPattern(patternIdx);
         }
 
-        private void ClearHover()
+        internal void SetTimelineHover(int patternIdx)
         {
-            if (Platform.IsDesktop)
-            {
-                SetAndMarkDirty(ref hoverRow, -1);
-                SetAndMarkDirty(ref hoverPattern, -1);
+            if (!Platform.IsDesktop)
+                return;
 
-                UpdateChannelRowHover();
-                UpdateTimelineHover();
-            }
+            channelArea.SetHover(-1);
+            timeline.SetHoverPattern(patternIdx);
+        }
+
+        internal void SetChannelHover(int rowIdx)
+        {
+            if (!Platform.IsDesktop)
+                return;
+
+            channelArea.SetHover(rowIdx);
+            timeline.SetHoverPattern(-1);
+        }
+
+        internal void ClearHover()
+        {
+            if (!Platform.IsDesktop)
+                return;
+
+            channelArea.SetHover(-1);
+            timeline.SetHoverPattern(-1);
         }
 
         protected override void OnPointerLeave(EventArgs e)
