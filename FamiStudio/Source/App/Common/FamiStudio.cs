@@ -189,7 +189,7 @@ namespace FamiStudio
             Sequencer.PatternModified    += Sequencer_PatternModified;
             Sequencer.SelectionChanged   += Sequencer_SelectionChanged;
             Sequencer.PatternsPasted     += Sequencer_PatternsPasted;
-            Sequencer.ShyChanged         += Sequencer_ShyChanged;
+            //Sequencer.ShyChanged         += Sequencer_ShyChanged;
 
             PianoRoll.PatternChanged     += PianoRoll_PatternChanged;
             PianoRoll.ManyPatternChanged += PianoRoll_ManyPatternChanged;
@@ -1261,7 +1261,6 @@ namespace FamiStudio
 
         public void OpenConfigDialog()
         {
-            var prevSelect = Settings.UseLegacySelectionMode;
             var dlg = new ConfigDialog(window);
 
             dlg.ShowDialogAsync((r) =>
@@ -1272,9 +1271,8 @@ namespace FamiStudio
                     if (r == DialogResult.Yes)
                         RecreateAudioPlayers(true);
 
-                    // Apply settings to piano roll if selection mode has changed.
-                    if (prevSelect != Settings.UseLegacySelectionMode)
-                        ApplySettings();
+                    // Apply settings to piano roll and sequencer in case any were changed.
+                    ApplySettings();
 
                     RefreshLayout();
                     RefreshProjectExplorerButtons();

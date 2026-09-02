@@ -29,10 +29,10 @@ namespace FamiStudio
         public delegate void ScrolledDelegate(ScrollBar sender, int pos);
         public event ScrolledDelegate Scrolled;
 
-        public ScrollBar()
+        public ScrollBar(bool horizontal = false)
         {
+            this.horizontal = horizontal;
             supportsDoubleClick = false;
-            UpdateThickness();
         }
 
         protected override void OnAddedToContainer()
@@ -95,7 +95,7 @@ namespace FamiStudio
             }
         }
 
-        private void UpdateThickness()
+        public void UpdateThickness()
         {
             scrollbarThickness = DpiScaling.ScaleForWindow(Settings.ScrollBars >= 2 ? DefaultScrollBarThickness2 : DefaultScrollBarThickness1);
         }

@@ -13,34 +13,21 @@ namespace FamiStudio
         private Container rowsContainer;
         private ChannelRow[] rows;
         private Button shyButton;
-        private bool hideEmptyChannels;
         private bool forceShyOff;
         private int bottomY;
 
         private Song Song => App?.SelectedSong;
 
-        internal bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
-        private int[] ChannelToRow       => sequencer.ChannelToRow;
-        private int ChannelNameSizeX     => sequencer.ChannelNameSizeX;
-        private int ChannelSizeY         => sequencer.ChannelSizeY;
-        private int ContentBottomY       => sequencer.ContentBottomY;
-        private int HeaderSizeY          => sequencer.HeaderSizeY;
-        private int ViewScrollY          => sequencer.ViewScrollY;
+        private bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
+        private bool HideEmptyChannels  => sequencer.HideEmptyChannels;
+        private int[] ChannelToRow      => sequencer.ChannelToRow;
+        private int ChannelNameSizeX    => sequencer.ChannelNameSizeX;
+        private int ChannelSizeY        => sequencer.ChannelSizeY;
+        private int ContentBottomY      => sequencer.ContentBottomY;
+        private int HeaderSizeY         => sequencer.HeaderSizeY;
+        private int ViewScrollY         => sequencer.ViewScrollY;
 
         internal LocalizedString MoreOptionsText => sequencer.MoreOptionsText;
-
-        public bool HideEmptyChannels
-        {
-            get => hideEmptyChannels;
-            set
-            {
-                if (hideEmptyChannels != value)
-                {
-                    hideEmptyChannels = value;
-                    MarkDirty();
-                }
-            }
-        }
 
         public bool ForceShyOff
         {
@@ -77,7 +64,7 @@ namespace FamiStudio
             };
 
             shyButton.ImageEvent += ShyButton_ImageEvent;
-            shyButton.Click += (s) => ShyClicked?.Invoke();
+            shyButton.Click      += ShyButton_Clicked;
 
             AddControl(rowsContainer);
             AddControl(shyButton);
@@ -86,10 +73,16 @@ namespace FamiStudio
         private string ShyButton_ImageEvent(Control sender, ref Color tint)
         {
             tint = Theme.LightGreyColor2;
-            return hideEmptyChannels && !forceShyOff ? "ShyOn" : "ShyOff";
+            return HideEmptyChannels && !forceShyOff ? "ShyOn" : "ShyOff";
         }
 
-        public void RecreateRows()
+        private void ShyButton_Clicked(Control sender)
+        {
+            sequencer.SetHideEmptyChannels(!HideEmptyChannels);
+            sequencer.LayoutChanged();
+        }
+
+        private void RecreateRows()
         {
             if (rows != null)
             {
@@ -124,9 +117,14 @@ namespace FamiStudio
             }
         }
 
+        public void Reset()
+        {
+            RecreateRows();
+        }
+
         public void UpdateLayout()
         {
-            Resize(ChannelNameSizeX, ContentBottomY);
+            Resize(ChannelNameSizeX, ContentBottomY + sequencer.ScrollBarThickness);
 
             rowsContainer.Move(0, HeaderSizeY + RowClipInset);
 
@@ -163,7 +161,19 @@ namespace FamiStudio
             rowsContainer.Visible = rowCount > 0;
             rowsContainer.Resize(Width, rowCount * ChannelSizeY - RowClipInset);
 
+            // Only enable tick when we have zero channels visible. Used for updating the shy icon.
+            var flashShy = HideEmptyChannels && !rowsContainer.Visible;
+            SetTickEnabled(flashShy);
+
+            if (!flashShy)
+                SetAndMarkDirty(ref forceShyOff, false);
+
             bottomY = HeaderSizeY + rowCount * ChannelSizeY;
+        }
+
+        private void UpdateShyIcon()
+        {
+            SetAndMarkDirty(ref forceShyOff, Utils.Frac(Platform.TimeSeconds()) < 0.25f);
         }
 
         public void SetHover(int hoverRow)
@@ -178,6 +188,12 @@ namespace FamiStudio
         public void UpdateScroll(int y)
         {
             rowsContainer.ScrollY = y;
+        }
+
+        public override void Tick(float delta)
+        {
+            base.Tick(delta);
+            UpdateShyIcon();
         }
 
         public override void OnContainerPointerMoveNotify(Control control, PointerEventArgs e)
@@ -380,6 +396,13 @@ namespace FamiStudio
                 dimming = 50;
                 return (App.ForceDisplayChannelMask & (1L << ChannelIndex)) == 0;
             }
+
+            protected override void OnPointerDown(PointerEventArgs e)
+            {
+                base.OnPointerUp(e);
+                hovered = true;
+            }
+
 
             protected override void OnPointerUp(PointerEventArgs e)
             {
