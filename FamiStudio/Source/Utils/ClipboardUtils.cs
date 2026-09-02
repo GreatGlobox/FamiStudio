@@ -384,6 +384,19 @@ namespace FamiStudio
                             var instrument = serializer.Project.CreateInstrument(instType, instName);
                             serializer.RemapId(instId, instrument.Id);
                             instrument.Serialize(serializer);
+
+                            // Remove any null sample mappings, otherwise we will crash on cut / copy.
+                            var nullMappings = new List<int>();
+
+                            foreach (var kv in instrument.SamplesMapping)
+                            {
+                                if (kv.Value != null && kv.Value.Sample == null)
+                                    nullMappings.Add(kv.Key);
+                            }
+
+                            foreach (var note in nullMappings)
+                                instrument.UnmapDPCMSample(note);
+
                             instrument.Name = instName;
                         }
                         else
