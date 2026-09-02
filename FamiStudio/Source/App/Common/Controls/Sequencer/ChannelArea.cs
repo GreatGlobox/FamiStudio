@@ -1,18 +1,21 @@
 using System;
+using System.Diagnostics;
 
 namespace FamiStudio
 {
     internal class ChannelArea : Container
     {
+        const int   RowClipInset    = 1;
+        const float HeaderIconScale = Platform.IsMobile ? 0.5f  : 1.0f;
+        const float IconScale       = Platform.IsMobile ? 0.25f : 1.0f;
+        
         private readonly Sequencer sequencer;
         private Container rowsContainer;
         private ChannelRow[] rows;
         private Button shyButton;
         private bool hideEmptyChannels;
         private bool forceShyOff;
-        private float headerIconScale = 1.0f;
         private int bottomY;
-        private int lastScrollY;
 
         private Song Song => App?.SelectedSong;
 
@@ -52,18 +55,6 @@ namespace FamiStudio
             }
         }
 
-        public float HeaderIconScale
-        {
-            get => headerIconScale;
-            set
-            {
-                headerIconScale = value;
-
-                if (shyButton != null)
-                    shyButton.ImageScale = value;
-            }
-        }
-
         public event Action ShyClicked;
 
         LocalizedString ShyModeTooltip;
@@ -81,7 +72,7 @@ namespace FamiStudio
             shyButton = new Button("ShyOff")
             {
                 Transparent = true,
-                ImageScale = headerIconScale,
+                ImageScale = DpiScaling.ScaleForWindowFloat(HeaderIconScale),
                 ToolTip = $"<MouseLeft> {ShyModeTooltip}"
             };
 
@@ -98,7 +89,7 @@ namespace FamiStudio
             return hideEmptyChannels && !forceShyOff ? "ShyOn" : "ShyOff";
         }
 
-        public void RecreateRows(float iconScale)
+        public void RecreateRows()
         {
             if (rows != null)
             {
@@ -126,7 +117,7 @@ namespace FamiStudio
                     MarkDirty();
                 };
 
-                row.IconScale = iconScale;
+                row.IconScale = DpiScaling.ScaleForWindowFloat(IconScale);
 
                 rows[i] = row;
                 rowsContainer.AddControl(row);
@@ -137,7 +128,7 @@ namespace FamiStudio
         {
             Resize(ChannelNameSizeX, ContentBottomY);
 
-            rowsContainer.Move(0, HeaderSizeY);
+            rowsContainer.Move(0, HeaderSizeY + RowClipInset);
 
             shyButton.Move(Width - HeaderSizeY, 0);
             shyButton.Resize(HeaderSizeY, HeaderSizeY);
@@ -162,39 +153,17 @@ namespace FamiStudio
                 maxRow = Math.Max(maxRow, rowIdx);
 
                 row.Visible = true;
+
                 row.Resize(Width, ChannelSizeY);
+                row.Move(0, rowIdx * ChannelSizeY - RowClipInset);
             }
 
             var rowCount = maxRow + 1;
 
             rowsContainer.Visible = rowCount > 0;
-            rowsContainer.Resize(Width, rowCount * ChannelSizeY);
+            rowsContainer.Resize(Width, rowCount * ChannelSizeY - RowClipInset);
 
             bottomY = HeaderSizeY + rowCount * ChannelSizeY;
-
-            UpdateRowPositions();
-        }
-
-        private void UpdateRowPositions()
-        {
-            if (rows == null || ChannelToRow == null)
-                return;
-
-            lastScrollY = ViewScrollY;
-
-            for (var i = 0; i < rows.Length; i++)
-            {
-                var rowIdx = ChannelToRow[i];
-
-                if (rowIdx >= 0)
-                    rows[i].Move(0, rowIdx * ChannelSizeY - ViewScrollY);
-            }
-        }
-
-        private void ConditionalUpdateRowScroll()
-        {
-            if (lastScrollY != ViewScrollY)
-                UpdateRowPositions();
         }
 
         public void SetHover(int hoverRow)
@@ -204,6 +173,11 @@ namespace FamiStudio
                 var rowIdx = ChannelToRow[i];
                 rows[i].Hovered = rowIdx >= 0 && rowIdx == hoverRow;
             }
+        }
+
+        public void UpdateScroll(int y)
+        {
+            rowsContainer.ScrollY = y;
         }
 
         public override void OnContainerPointerMoveNotify(Control control, PointerEventArgs e)
@@ -235,8 +209,6 @@ namespace FamiStudio
 
         protected override void OnRender(Graphics g)
         {
-            ConditionalUpdateRowScroll();
-
             var c = g.DefaultCommandList;
 
             c.FillRectangle(0, 0, Width, Height, Theme.DarkGreyColor2);
@@ -247,12 +219,13 @@ namespace FamiStudio
             c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
             c.DrawLine(0, HeaderSizeY, Width, HeaderSizeY, Theme.BlackColor);
 
+            if (rowsContainer.Visible)
+                c.DrawLine(0, bottomY - ViewScrollY, Width, bottomY - ViewScrollY, Theme.BlackColor);
+
             if (Platform.IsMobile && IsLandscape)
                 c.DrawLine(0, 0, 0, Height, Theme.BlackColor);
-
-            c.DrawLine(0, bottomY, Width, bottomY, Theme.BlackColor);
         }
-        
+
         private class ChannelRow : Container
         {
             const int DefaultChannelIconPosX  = 2;
@@ -370,8 +343,7 @@ namespace FamiStudio
                     $"<MouseLeft> {ForceDisplayTooltip}\n" +
                     $"<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
 
-                if (ChannelIndex >= 0 &&
-                    ChannelIndex < Settings.DisplayChannelShortcuts.Length)
+                if (ChannelIndex >= 0 && ChannelIndex < Settings.DisplayChannelShortcuts.Length)
                 {
                     tooltip += $" {Settings.DisplayChannelShortcuts[ChannelIndex].TooltipString}";
                 }

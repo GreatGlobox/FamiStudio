@@ -610,13 +610,6 @@ namespace FamiStudio
 
             ConditionalEmitDelayedRightClick(false, true, ctrl);
 
-            // Dont forward move mouse when a context menu is active.
-            if (ctrl != null && (!container.IsContextMenuActive || ContextMenu.ContainsMenu(ctrl)))
-            {
-                ctrl.SendPointerMove(e);
-                RefreshCursor(ctrl);
-            }
-
             if (hover != hoverControl)
             {
                 // We need to ensure child elements of a container know the pointer has left it.
@@ -630,6 +623,13 @@ namespace FamiStudio
 
                 hoverControl = hover;
                 hoverControl?.SendPointerEnter(EventArgs.Empty);
+            }
+
+            // Dont forward move mouse when a context menu is active.
+            if (ctrl != null && (!container.IsContextMenuActive || ContextMenu.ContainsMenu(ctrl)))
+            {
+                ctrl.SendPointerMove(e);
+                RefreshCursor(ctrl);
             }
         }
 

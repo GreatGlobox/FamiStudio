@@ -5,13 +5,6 @@ using System.Linq;
 
 namespace FamiStudio
 {
-    // This and the Piano Roll are the only 2 "Uber-Control" left, where everything is in one class with 
-    // no sub-widgets whatsoever. Both of these need a full rewrite. This is for historical reason, when
-    // the app started, we didnt have a proper widget system, we sort-of do now. Also, all the touch and
-    // mouse input would need to be unified as much as possible.
-    //
-    // The sequencer would need to be broken down into a timeline, a pattern area, the channel names and
-    // associated icons needs to be made into real buttons, etc.
     public class Sequencer : Container
     {
         const int DefaultChannelNameSizeX    = Platform.IsMobile ? 68 : 94;
@@ -60,8 +53,6 @@ namespace FamiStudio
         int selectionDragAnchorPatternIdx = -1;
         int sequencerHeightOverride = -1;
         float zoom = DefaultZoom;
-        float bitmapScale = 1.0f;
-        float channelBitmapScale = 1.0f;
         float flingVelX;
         float flingVelY;
         float selectionDragAnchorPatternXFraction = -1.0f;
@@ -244,8 +235,6 @@ namespace FamiStudio
         {
             Localization.Localize(this);
             SetTickEnabled(true);
-            supportsLongPress = true;
-            supportsDoubleClick = true;
         }
 
         private Song Song
@@ -342,7 +331,6 @@ namespace FamiStudio
         {
             var channelCount = GetChannelCount(false);
             var visibleChannelCount = GetChannelCount(true);
-            //var scrollBarSize = Settings.ScrollBars == 1 ? DefaultScrollBarThickness1 : (Settings.ScrollBars == 2 ? DefaultScrollBarThickness2 : 0);
             var constantSize  = DefaultHeaderSizeY + scrollBarThickness + resizeBarSizeY + 1;
 
             if (Platform.IsMobile)
@@ -401,31 +389,15 @@ namespace FamiStudio
         {
             UpdateRenderCoords();
             ClampScroll();
-            UpdateChannelRowLayout();
-            UpdateTimelineLayout();
-            UpdatePatternAreaLayout();
+            UpdateLayout();
             InvalidatePatternCache();
             MarkDirty();
         }
 
-        // TODO: ChannelArea and Timeline should probably have their own updatelayout functions and just get called here instead.
-        private void RecreateChannelRows()
-        {
-            channelArea.RecreateRows(channelBitmapScale);
-        }
-
-        private void UpdateChannelRowLayout()
+        private void UpdateLayout()
         {
             channelArea.UpdateLayout();
-        }
-
-        private void UpdateTimelineLayout()
-        {
             timeline.UpdateLayout();
-        }
-
-        private void UpdatePatternAreaLayout()
-        {
             patternArea.UpdateLayout();
         }
         
@@ -481,10 +453,18 @@ namespace FamiStudio
             zoom = DefaultZoom;
             ClearSelection();
             SetHideEmptyChannels(false);
-            RecreateChannelRows();
+            channelArea.RecreateRows();
             InvalidatePatternCache();
         }
 
+        public override void OnContainerPointerEnterNotify(Control control, EventArgs e)
+        {
+            while (control != null && string.IsNullOrEmpty(control.ToolTip))
+                control = control.ParentContainer;
+
+            App.SetToolTip(control?.ToolTip ?? "");
+        }
+        
         private void RebuildChannelMap()
         {
             if (Song == null)
@@ -698,7 +678,6 @@ namespace FamiStudio
 
             channelArea = new ChannelArea(this)
             {
-                HeaderIconScale = bitmapScale,
                 HideEmptyChannels = hideEmptyChannels,
                 ForceShyOff = forceShyOff
             };
@@ -719,19 +698,14 @@ namespace FamiStudio
             AddControl(timeline);
             AddControl(patternArea);
 
-            UpdateChannelRowLayout();
-            UpdateTimelineLayout();
-            UpdatePatternAreaLayout();
+            UpdateLayout();
         }
 
         protected override void OnResize(EventArgs e)
         {
             UpdateRenderCoords();
             ClampScroll();
-
-            UpdateChannelRowLayout();
-            UpdateTimelineLayout();
-            UpdatePatternAreaLayout();
+            UpdateLayout();
         }
 
         protected bool IsSelectionValid()
@@ -1015,6 +989,8 @@ namespace FamiStudio
             if (scrollX > maxScrollX) { scrollX = maxScrollX; scrolledY = false; }
             if (scrollY < minScrollY) { scrollY = minScrollY; scrolledY = false; }
             if (scrollY > maxScrollY) { scrollY = maxScrollY; scrolledY = false; }
+
+            channelArea.UpdateScroll(scrollY); // TODO: Probably shouldn't need this?
             
             return scrolledX || scrolledY;
         }
@@ -1213,7 +1189,7 @@ namespace FamiStudio
                     }
                     else if (y > (scrollBarThumbPosY + scrollBarThumbSizeY))
                     {
-                        scrollX += (height - headerSizeY);
+                        scrollY += (height - headerSizeY);
                         ClampScroll();
                         MarkDirty();
                     }

@@ -272,9 +272,6 @@ namespace FamiStudio
         protected override void OnPointerEnter(EventArgs e)
         {
             SetAndMarkDirty(ref hover, Platform.IsDesktop);
-            
-            if (!string.IsNullOrEmpty(tooltip))
-                App.SetToolTip(tooltip);
         }
 
         protected override void OnPointerLeave(EventArgs e)
