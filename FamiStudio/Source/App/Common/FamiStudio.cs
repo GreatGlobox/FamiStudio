@@ -259,12 +259,13 @@ namespace FamiStudio
                     song = value;
 
                     ResetSelectedChannel();
-                    RefreshLayout();
+                    
                     ProjectExplorer.SelectedSongChanged();
                     PianoRoll.SongChanged(ChannelType.Square1);
                     Sequencer.Reset();
                     ToolBar.Reset();
 
+                    RefreshLayout();
                     MarkEverythingDirty();
                 }
             }
