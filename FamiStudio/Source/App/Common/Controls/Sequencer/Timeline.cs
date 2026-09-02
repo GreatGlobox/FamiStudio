@@ -10,7 +10,6 @@ namespace FamiStudio
         const int OutlineThickness      = 3;
 
         private readonly Sequencer sequencer;
-        private int headerSizeY;
         private int hoverPattern = -1;
         private int barTextPosY;
         private float[] seekGeometry;
@@ -33,6 +32,24 @@ namespace FamiStudio
         LocalizedString SelectColumnTooltip;
 
         private Song Song => App?.SelectedSong;
+
+        private Color SelectedPatternVisibleColor => sequencer.SelectedPatternVisibleColor;
+        private Color SeekBarColor                => sequencer.SeekBarColor;
+
+        private bool HasTimelineSelection        => sequencer.HasTimelineSelection;
+        private bool LegacySelectMode            => sequencer.LegacySelectMode;
+        private bool IsResizing                  => sequencer.IsResizing;
+        private bool IsColumnSelectionCapture    => sequencer.IsColumnSelectionCapture;
+        private bool ColumnSelectionThresholdMet => sequencer.ColumnSelectionThresholdMet;
+
+        private int ChannelNameSizeX    => sequencer.ChannelNameSizeX;
+        private int HeaderSizeY         => sequencer.HeaderSizeY;
+        private int SeekFrameToDraw     => sequencer.SeekFrameToDraw;
+        private int SelectionMinPattern => sequencer.SelectionMinPattern;
+        private int SelectionMaxPattern => sequencer.SelectionMaxPattern;
+        private int ViewScrollX         => sequencer.ViewScrollX;
+
+        private float NoteSizeX => sequencer.NoteSizeX;
 
         internal Timeline(Sequencer sequencer)
         {
@@ -63,6 +80,12 @@ namespace FamiStudio
             bitmapScale = Platform.IsMobile ? DpiScaling.ScaleForWindowFloat(0.5f) : 1.0f;
         }
 
+        internal void UpdateLayout()
+        {
+            Move(ChannelNameSizeX, 0);
+            Resize(sequencer.Width - ChannelNameSizeX, HeaderSizeY + 1);
+        }
+
         public void SetHoverPattern(int pattern)
         {
             if (hoverPattern != pattern)
@@ -74,13 +97,13 @@ namespace FamiStudio
 
         private int GetPixelForNote(int note)
         {
-            return (int)(note * (double)sequencer.NoteSizeX) - sequencer.ViewScrollX;
+            return (int)(note * (double)NoteSizeX) - ViewScrollX;
         }
 
         private int GetNoteForPixel(int x)
         {
-            x += sequencer.ViewScrollX;
-            return (int)(x / (double)sequencer.NoteSizeX);
+            x += ViewScrollX;
+            return (int)(x / (double)NoteSizeX);
         }
 
         private int GetPatternIndexForCoord(int x)
@@ -89,14 +112,14 @@ namespace FamiStudio
             return Utils.Clamp(Song.PatternIndexFromAbsoluteNoteIndex(note), 0, Song.Length - 1);
         }
 
-        private bool IsPatternSelected(int patternIdx)
+        private bool IsPatternColumnSelected(int patternIdx)
         {
             return sequencer.IsPatternColumnSelected(patternIdx);
         }
 
         private bool IsPointOnSeekBar(int x)
         {
-            var seekX = GetPixelForNote(sequencer.SeekFrameToDraw);
+            var seekX = GetPixelForNote(SeekFrameToDraw);
             var margin = DpiScaling.ScaleForWindow(12);
 
             return Math.Abs(x - seekX) <= margin;
@@ -138,7 +161,7 @@ namespace FamiStudio
 
             if (e.IsTouchEvent)
             {
-                if (sequencer.LegacySelectMode)
+                if (LegacySelectMode)
                     ColumnSelectionRequested?.Invoke(this, e);
 
                 return;
@@ -188,23 +211,41 @@ namespace FamiStudio
         protected override void OnPointerUp(PointerEventArgs e)
         {
             base.OnPointerUp(e);
-            
+            var columnSelection = IsColumnSelectionCapture;
+
             if (e.Right || e.IsLongPress)
             {
-                if (!sequencer.ColumnSelectionThresholdMet)
+                if (!ColumnSelectionThresholdMet)
                     ShowContextMenu(e.X, e.Y);
-
-                return;
+            }
+            else if (e.IsTouchEvent)
+            {
+                App.SeekSong(GetNoteForPixel(e.X));
             }
 
-            if (e.IsTouchEvent)
-                App.SeekSong(GetNoteForPixel(e.X));
+            if (columnSelection)
+            {
+                var p = sequencer.WindowToControl(ControlToWindow(e.Position));
+                sequencer.EndColumnSelection(p.X, p.Y);
+            }
         }
 
         protected override void OnPointerMove(PointerEventArgs e)
         {
             base.OnPointerMove(e);
             sequencer.SetTimelineHover(GetPatternIndexForCoord(e.X));
+
+            if (IsColumnSelectionCapture)
+            {
+                var p = sequencer.WindowToControl(ControlToWindow(e.Position));
+                sequencer.UpdateColumnSelection(p.X, p.Y);
+            }
+        }
+
+        protected override void OnPointerEnter(EventArgs e)
+        {
+            base.OnPointerEnter(e);
+            App.SetToolTip(ToolTip);
         }
 
         protected override void OnTouchLongPress(PointerEventArgs e)
@@ -216,7 +257,7 @@ namespace FamiStudio
                 return;
 
             // Trigger the context menu if using legacy selection. Otherwise, start a selection.
-            if (sequencer.LegacySelectMode)
+            if (LegacySelectMode)
             {
                 ShowContextMenu(x, y);
             }
@@ -245,19 +286,17 @@ namespace FamiStudio
         {
             base.OnResize(e);
 
-            headerSizeY = Height - 1;
-
             seekGeometry = new float[]
             {
-                -headerSizeY / 2, 1,
-                0, headerSizeY - 2,
-                headerSizeY / 2, 1
+                -HeaderSizeY / 2, 1,
+                0, HeaderSizeY - 2,
+                HeaderSizeY / 2, 1
             };
         }
 
         protected override void OnRender(Graphics g)
         {
-            if (Song == null || sequencer.NoteSizeX <= 0.0f)
+            if (Song == null || NoteSizeX <= 0.0f)
                 return;
 
             var minVisibleNoteIdx = Math.Max(GetNoteForPixel(0), 0);
@@ -268,40 +307,40 @@ namespace FamiStudio
             var c = g.DefaultCommandList;
             var b = g.BackgroundCommandList;
 
-            c.DrawLine(0, headerSizeY, Width, headerSizeY, Theme.BlackColor);
+            c.DrawLine(0, HeaderSizeY, Width, HeaderSizeY, Theme.BlackColor);
 
             // Background.
             for (int i = minVisiblePattern; i < maxVisiblePattern; i++)
             {
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                var sx = (int)(Song.GetPatternLength(i) * (double)sequencer.NoteSizeX);
-                var color = !sequencer.IsResizing && i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
+                var sx = (int)(Song.GetPatternLength(i) * (double)NoteSizeX);
+                var color = !IsResizing && i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
 
-                b.FillRectangle(px, 0, px + sx, headerSizeY, color);
+                b.FillRectangle(px, 0, px + sx, HeaderSizeY, color);
             }
 
             // Selection.
-            if (sequencer.HasTimelineSelection && Song.Length > 0)
+            if (HasTimelineSelection && Song.Length > 0)
             {
-                if (sequencer.LegacySelectMode)
+                if (LegacySelectMode)
                 {
                     c.FillRectangle(
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(sequencer.SelectionMinPattern,     Song.Length))), 0,
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(sequencer.SelectionMaxPattern + 1, Song.Length))), headerSizeY,
-                        sequencer.SelectedPatternVisibleColor);
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMinPattern,     Song.Length))), 0,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMaxPattern + 1, Song.Length))), HeaderSizeY,
+                        SelectedPatternVisibleColor);
                 }
                 else
                 {
                     for (var i = minVisiblePattern; i < maxVisiblePattern; i++)
                     {
-                        if (!sequencer.IsPatternColumnSelected(i))
+                        if (!IsPatternColumnSelected(i))
                             continue;
 
                         var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                        var sx = (int)(Song.GetPatternLength(i) * (double)sequencer.NoteSizeX);
+                        var sx = (int)(Song.GetPatternLength(i) * (double)NoteSizeX);
 
-                        c.FillRectangle(px, 0, px + sx, headerSizeY, sequencer.SelectedPatternVisibleColor);
-                        c.DrawRectangle(px, 1, px + sx, headerSizeY - 1, Theme.WhiteColor, OutlineThickness, true);
+                        c.FillRectangle(px, 0, px + sx, HeaderSizeY, SelectedPatternVisibleColor);
+                        c.DrawRectangle(px, 1, px + sx, HeaderSizeY - 1, Theme.WhiteColor, OutlineThickness, true);
                     }
                 }
             }
@@ -312,7 +351,7 @@ namespace FamiStudio
             for (int i = Math.Max(1, minVisiblePattern); i <= maxVisiblePattern; i++)
             {
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                b.DrawLine(px, 0, px, headerSizeY, Theme.BlackColor);
+                b.DrawLine(px, 0, px, HeaderSizeY, Theme.BlackColor);
             }
 
             // Pattern indexes.
@@ -320,14 +359,14 @@ namespace FamiStudio
             {
                 var patternLen = Song.GetPatternLength(i);
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                var sx = (int)(patternLen * (double)sequencer.NoteSizeX);
+                var sx = (int)(patternLen * (double)NoteSizeX);
 
                 if (sx > 0)
                 {
                     c.PushTranslation(px, 0);
 
                     var text = (i + 1).ToString();
-                    var selected = IsPatternSelected(i);
+                    var selected = IsPatternColumnSelected(i);
 
                     if (Song.PatternHasCustomSettings(i))
                         text += "*";
@@ -342,10 +381,10 @@ namespace FamiStudio
             }
 
             // Seek bar.
-            var seekX = GetPixelForNote(sequencer.SeekFrameToDraw);
+            var seekX = GetPixelForNote(SeekFrameToDraw);
 
             c.PushTranslation(seekX, 0);
-            c.FillAndDrawGeometry(seekGeometry, sequencer.SeekBarColor, Theme.BlackColor, 1, true);
+            c.FillAndDrawGeometry(seekGeometry, SeekBarColor, Theme.BlackColor, 1, true);
             c.PopTransform();
 
             base.OnRender(g);

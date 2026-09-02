@@ -11,13 +11,19 @@ namespace FamiStudio
         private bool hideEmptyChannels;
         private bool forceShyOff;
         private float headerIconScale = 1.0f;
-        private int[] channelToRow;
         private int bottomY;
         private int lastScrollY;
 
-        private Song Song => App.SelectedSong;
+        private Song Song => App?.SelectedSong;
 
         internal bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
+        private int[] ChannelToRow       => sequencer.ChannelToRow;
+        private int ChannelNameSizeX     => sequencer.ChannelNameSizeX;
+        private int ChannelSizeY         => sequencer.ChannelSizeY;
+        private int ContentBottomY       => sequencer.ContentBottomY;
+        private int HeaderSizeY          => sequencer.HeaderSizeY;
+        private int ViewScrollY          => sequencer.ViewScrollY;
+
         internal LocalizedString MoreOptionsText => sequencer.MoreOptionsText;
 
         public bool HideEmptyChannels
@@ -127,16 +133,16 @@ namespace FamiStudio
             }
         }
 
-        public void UpdateLayout(int[] channelToRow)
+        public void UpdateLayout()
         {
-            this.channelToRow = channelToRow;
+            Resize(ChannelNameSizeX, ContentBottomY);
 
-            rowsContainer.Move(0, sequencer.HeaderSizeY);
+            rowsContainer.Move(0, HeaderSizeY);
 
-            shyButton.Move(Width - sequencer.HeaderSizeY, 0);
-            shyButton.Resize(sequencer.HeaderSizeY, sequencer.HeaderSizeY);
+            shyButton.Move(Width - HeaderSizeY, 0);
+            shyButton.Resize(HeaderSizeY, HeaderSizeY);
 
-            if (rows == null || channelToRow == null)
+            if (rows == null || ChannelToRow == null)
                 return;
 
             var maxRow = -1;
@@ -144,7 +150,8 @@ namespace FamiStudio
             for (var i = 0; i < rows.Length; i++)
             {
                 var row = rows[i];
-                var rowIdx = channelToRow[i];
+                var rowIdx = ChannelToRow[i];
+
                 if (rowIdx < 0)
                 {
                     row.Visible = false;
@@ -155,36 +162,38 @@ namespace FamiStudio
                 maxRow = Math.Max(maxRow, rowIdx);
 
                 row.Visible = true;
-                row.Resize(Width, sequencer.ChannelSizeY);
+                row.Resize(Width, ChannelSizeY);
             }
 
             var rowCount = maxRow + 1;
 
             rowsContainer.Visible = rowCount > 0;
-            rowsContainer.Resize(Width, rowCount * sequencer.ChannelSizeY);
-            bottomY = sequencer.HeaderSizeY + rowCount * sequencer.ChannelSizeY;
+            rowsContainer.Resize(Width, rowCount * ChannelSizeY);
+
+            bottomY = HeaderSizeY + rowCount * ChannelSizeY;
 
             UpdateRowPositions();
         }
 
         private void UpdateRowPositions()
         {
-            if (rows == null || channelToRow == null)
+            if (rows == null || ChannelToRow == null)
                 return;
 
-            lastScrollY = sequencer.ViewScrollY;
+            lastScrollY = ViewScrollY;
 
             for (var i = 0; i < rows.Length; i++)
             {
-                var rowIdx = channelToRow[i];
+                var rowIdx = ChannelToRow[i];
+
                 if (rowIdx >= 0)
-                    rows[i].Move(0, rowIdx * sequencer.ChannelSizeY - sequencer.ViewScrollY);
+                    rows[i].Move(0, rowIdx * ChannelSizeY - ViewScrollY);
             }
         }
 
         private void ConditionalUpdateRowScroll()
         {
-            if (lastScrollY != sequencer.ViewScrollY)
+            if (lastScrollY != ViewScrollY)
                 UpdateRowPositions();
         }
 
@@ -192,7 +201,7 @@ namespace FamiStudio
         {
             for (var i = 0; i < rows.Length; i++)
             {
-                var rowIdx = channelToRow[i];
+                var rowIdx = ChannelToRow[i];
                 rows[i].Hovered = rowIdx >= 0 && rowIdx == hoverRow;
             }
         }
@@ -207,7 +216,7 @@ namespace FamiStudio
 
                 if (control == row || control.IsInContainer(row))
                 {
-                    sequencer.SetChannelHover(channelToRow[i]);
+                    sequencer.SetChannelHover(ChannelToRow[i]);
                     return;
                 }
             }
@@ -215,9 +224,12 @@ namespace FamiStudio
             sequencer.ClearHover();
         }
 
-        protected override void OnPointerMove(PointerEventArgs e)
+        protected override void OnPointerEnter(EventArgs e)
         {
-            base.OnPointerMove(e);
+            base.OnPointerEnter(e);
+
+            // This is outside the channel rows, and not the shy button.
+            App.SetToolTip("");
             sequencer.ClearHover();
         }
 
@@ -229,20 +241,18 @@ namespace FamiStudio
 
             c.FillRectangle(0, 0, Width, Height, Theme.DarkGreyColor2);
 
-            // Header.
+            base.OnRender(g);
+
             c.DrawLine(Width - 1, 0, Width - 1, Height, Theme.BlackColor);
             c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
-            c.DrawLine(0, sequencer.HeaderSizeY, Width, sequencer.HeaderSizeY, Theme.BlackColor);
+            c.DrawLine(0, HeaderSizeY, Width, HeaderSizeY, Theme.BlackColor);
 
             if (Platform.IsMobile && IsLandscape)
                 c.DrawLine(0, 0, 0, Height, Theme.BlackColor);
 
-            // Bottom line.
             c.DrawLine(0, bottomY, Width, bottomY, Theme.BlackColor);
-
-            base.OnRender(g);
         }
-
+        
         private class ChannelRow : Container
         {
             const int DefaultChannelIconPosX  = 2;
@@ -333,7 +343,6 @@ namespace FamiStudio
                 forceDisplayButton.DimmedEvent += ForceDisplayButton_DimmedEvent;
 
                 channelButton.ToolTip      = $"<MouseLeft> {MuteChannelTooltip} - <MouseLeft><MouseLeft> {SoloChannelTooltip}";
-                //forceDisplayButton.ToolTip = $"<MouseLeft> {ForceDisplayTooltip}\n<MouseLeft><MouseLeft> {ForceDisplayAllChannelsTooltip}";
 
                 UpdateForceDisplayToolTip();
 
@@ -409,6 +418,12 @@ namespace FamiStudio
                     hovered = false;
                     ShowContextMenu();
                 }
+            }
+
+            protected override void OnPointerEnter(EventArgs e)
+            {
+                base.OnPointerEnter(e);
+                App.SetToolTip(ToolTip);
             }
 
             public override void OnContainerPointerUpNotify(Control control, PointerEventArgs e)

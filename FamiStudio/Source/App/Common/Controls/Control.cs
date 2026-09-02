@@ -27,6 +27,7 @@ namespace FamiStudio
 
         public delegate void ControlDelegate(Control sender);
         public delegate void PointerEventDelegate(Control sender, PointerEventArgs e);
+        public delegate void EventDelegate(Control sender, EventArgs e);
 
         public event PointerEventDelegate PointerDown;
         public event PointerEventDelegate PointerUp;
@@ -38,6 +39,8 @@ namespace FamiStudio
         public event PointerEventDelegate ContainerPointerDownNotify;
         public event PointerEventDelegate ContainerPointerUpNotify;
         public event PointerEventDelegate ContainerPointerMoveNotify;
+        public event EventDelegate ContainerPointerEnterNotify;
+        public event EventDelegate ContainerPointerLeaveNotify;
         public event PointerEventDelegate ContainerTouchClickNotify;
         public event PointerEventDelegate ContainerTouchFlingNotify;
 
@@ -96,8 +99,8 @@ namespace FamiStudio
         public void SendPointerDownDelayed(PointerEventArgs e) { OnPointerDownDelayed(e); }
         public void SendPointerUp(PointerEventArgs e) { OnPointerUp(e); PointerUp?.Invoke(this, e); SendContainerPointerUpNotify(e); }
         public void SendPointerMove(PointerEventArgs e) { OnPointerMove(e); PointerMove?.Invoke(this, e); SendContainerPointerMoveNotify(e); }
-        public void SendPointerEnter(EventArgs e) { if (IsContainedByMainWindow) OnPointerEnter(e); }
-        public void SendPointerLeave(EventArgs e) { if (IsContainedByMainWindow) OnPointerLeave(e); }
+        public void SendPointerEnter(EventArgs e) { if (IsContainedByMainWindow) { OnPointerEnter(e); SendContainerPointerEnterNotify(e); } }
+        public void SendPointerLeave(EventArgs e) { if (IsContainedByMainWindow) { OnPointerLeave(e); SendContainerPointerLeaveNotify(e); } }
         public void SendMouseWheel(PointerEventArgs e) { OnMouseWheel(e); SendContainerMouseWheelNotify(e); }
         public void SendMouseHorizontalWheel(PointerEventArgs e) { OnMouseHorizontalWheel(e); }
         public void SendKeyDown(KeyEventArgs e) { OnKeyDown(e); }
@@ -195,6 +198,32 @@ namespace FamiStudio
             {
                 c.OnContainerPointerMoveNotify(this, e);
                 c.ContainerPointerMoveNotify?.Invoke(this, e);
+                if (c is Dialog)
+                    break;
+                c = c.ParentContainer;
+            }
+        }
+
+        public void SendContainerPointerEnterNotify(EventArgs e)
+        {
+            var c = ParentContainer;
+            while (c != null)
+            {
+                c.OnContainerPointerEnterNotify(this, e);
+                c.ContainerPointerEnterNotify?.Invoke(this, e);
+                if (c is Dialog)
+                    break;
+                c = c.ParentContainer;
+            }
+        }
+
+        public void SendContainerPointerLeaveNotify(EventArgs e)
+        {
+            var c = ParentContainer;
+            while (c != null)
+            {
+                c.OnContainerPointerLeaveNotify(this, e);
+                c.ContainerPointerLeaveNotify?.Invoke(this, e);
                 if (c is Dialog)
                     break;
                 c = c.ParentContainer;

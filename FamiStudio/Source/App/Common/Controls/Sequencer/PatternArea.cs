@@ -183,6 +183,14 @@ namespace FamiStudio
             return Utils.Clamp(Song.PatternIndexFromAbsoluteNoteIndex(note), 0, Song.Length - 1);
         }
 
+        internal void UpdateLayout()
+        {
+            var sizeX = sequencer.Width - sequencer.ChannelNameSizeX - (Settings.AllowSequencerVerticalScroll ? sequencer.ScrollBarThickness : 0);
+
+            Move(sequencer.ChannelNameSizeX, sequencer.HeaderSizeY);
+            Resize(sizeX, sequencer.ContentBottomY - sequencer.HeaderSizeY);
+        }
+
         internal bool GetPatternForCoord(int x, int y, out PatternLocation location)
         {
             var noteIdx = GetNoteForPixel(x);
@@ -823,6 +831,9 @@ namespace FamiStudio
             b.DrawLine(seekX, 0, seekX, Height, sequencer.SeekBarColor, 3);
 
             c.PopTransform();
+
+            // Top line (beneath timeline).
+            c.DrawLine(0, 0, Width, 0, Theme.BlackColor);
             c.PopClipRegion();
         }
     }
