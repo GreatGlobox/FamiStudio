@@ -91,6 +91,7 @@ namespace FamiStudio
         LocalizedString ShowRegisterViewerTooltip;
         LocalizedString DimUnsupportedChannelsTooltip;
         LocalizedString UseLegacySelectionModeTooltip;
+        LocalizedString RetainPreviousSelectionTooltip;
         LocalizedString UseOSDialogsTooltip;
         LocalizedString SystemOption;
 
@@ -108,6 +109,7 @@ namespace FamiStudio
         LocalizedString ShowRegisterViewerLabel;
         LocalizedString DimUnsupportedChannelsLabel;
         LocalizedString UseLegacySelectionModeLabel;
+        LocalizedString RetainPreviousSelectionLabel;
         LocalizedString UseOSDialogsLabel;
 
         // Input tooltips
@@ -300,7 +302,8 @@ namespace FamiStudio
                     page.AddCheckBox(ShowRegisterViewerLabel.Colon, Settings.ShowRegisterViewer, ShowRegisterViewerTooltip); // 10
                     page.AddCheckBox(DimUnsupportedChannelsLabel.Colon, Settings.DimUnsupportedChannels, DimUnsupportedChannelsTooltip); // 11
                     page.AddCheckBox(UseLegacySelectionModeLabel.Colon, Settings.UseLegacySelectionMode, UseLegacySelectionModeTooltip); // 12
-                    page.AddCheckBox(UseOSDialogsLabel.Colon, Settings.UseOSDialogs, UseOSDialogsTooltip); // 13
+                    page.AddCheckBox(RetainPreviousSelectionLabel.Colon, Settings.RetainPreviousSelection, RetainPreviousSelectionTooltip); // 13
+                    page.AddCheckBox(UseOSDialogsLabel.Colon, Settings.UseOSDialogs, UseOSDialogsTooltip); // 14
                         
                     page.SetPropertyEnabled(7, !Settings.AllowSequencerVerticalScroll);
                     
@@ -308,7 +311,8 @@ namespace FamiStudio
                     page.SetPropertyVisible(5, Platform.IsDesktop);
                     page.SetPropertyVisible(7, Platform.IsDesktop);
                     page.SetPropertyVisible(8, Platform.IsDesktop);
-                    page.SetPropertyVisible(13, Platform.IsDesktop);
+                    page.SetPropertyVisible(13, Platform.IsMobile);
+                    page.SetPropertyVisible(14, Platform.IsDesktop);
                     page.PropertyChanged += UserInterfacePage_PropertyChanged;
                     break;
                 }
@@ -595,7 +599,8 @@ namespace FamiStudio
                     Settings.ShowRegisterViewer = pageUI.GetPropertyValue<bool>(10);
                     Settings.DimUnsupportedChannels = pageUI.GetPropertyValue<bool>(11);
                     Settings.UseLegacySelectionMode = pageUI.GetPropertyValue<bool>(12);
-                    Settings.UseOSDialogs = pageUI.GetPropertyValue<bool>(13);
+                    Settings.RetainPreviousSelection = pageUI.GetPropertyValue<bool>(13);
+                    Settings.UseOSDialogs = pageUI.GetPropertyValue<bool>(14);
 
                     // Sound
                     var newAudioApi = pageSound.GetPropertyValue<string>(0);

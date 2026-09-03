@@ -6,9 +6,10 @@ namespace FamiStudio
     internal class ChannelArea : Container
     {
         const int   RowClipInset    = 1;
-        const float HeaderIconScale = Platform.IsMobile ? 0.5f  : 1.0f;
-        const float IconScale       = Platform.IsMobile ? 0.25f : 1.0f;
-        
+
+        static readonly float HeaderIconScale = Platform.IsMobile ? DpiScaling.ScaleForWindowFloat(0.5f)  : 1.0f;
+        static readonly float IconScale       = Platform.IsMobile ? DpiScaling.ScaleForWindowFloat(0.25f) : 1.0f;
+
         private readonly Sequencer sequencer;
         private Container rowsContainer;
         private ChannelRow[] rows;
@@ -59,7 +60,7 @@ namespace FamiStudio
             shyButton = new Button("ShyOff")
             {
                 Transparent = true,
-                ImageScale = DpiScaling.ScaleForWindowFloat(HeaderIconScale),
+                ImageScale = HeaderIconScale,
                 ToolTip = $"<MouseLeft> {ShyModeTooltip}"
             };
 
@@ -110,7 +111,7 @@ namespace FamiStudio
                     MarkDirty();
                 };
 
-                row.IconScale = DpiScaling.ScaleForWindowFloat(IconScale);
+                row.IconScale = IconScale;
 
                 rows[i] = row;
                 rowsContainer.AddControl(row);
@@ -131,9 +132,12 @@ namespace FamiStudio
             shyButton.Move(Width - HeaderSizeY, 0);
             shyButton.Resize(HeaderSizeY, HeaderSizeY);
 
-            if (rows == null || ChannelToRow == null)
+            if (ChannelToRow == null)
                 return;
 
+            if (rows == null || rows.Length != ChannelToRow.Length)
+                RecreateRows();
+                
             var maxRow = -1;
 
             for (var i = 0; i < rows.Length; i++)
@@ -212,6 +216,36 @@ namespace FamiStudio
             }
 
             sequencer.ClearHover();
+        }
+
+        protected override void OnMouseWheel(PointerEventArgs e)
+        {
+            base.OnMouseWheel(e);
+
+            if (!e.Handled)
+            {
+                if (Settings.AllowSequencerVerticalScroll)
+                    sequencer.AdjustPatternHeight(this, e);
+                else
+                    sequencer.HandleMouseWheel(this, e);
+
+                e.MarkHandled();
+            }
+        }
+
+        public override void OnContainerMouseWheelNotify(Control control, PointerEventArgs e)
+        {
+            base.OnContainerMouseWheelNotify(control, e);
+
+            if (!e.Handled)
+            {
+                if (Settings.AllowSequencerVerticalScroll)
+                    sequencer.AdjustPatternHeight(control, e);
+                else
+                    sequencer.HandleMouseWheel(this, e);
+
+                e.MarkHandled();
+            }
         }
 
         protected override void OnPointerEnter(EventArgs e)
@@ -399,10 +433,9 @@ namespace FamiStudio
 
             protected override void OnPointerDown(PointerEventArgs e)
             {
-                base.OnPointerUp(e);
-                hovered = true;
+                base.OnPointerDown(e);
+                Hovered = true;
             }
-
 
             protected override void OnPointerUp(PointerEventArgs e)
             {
@@ -410,7 +443,7 @@ namespace FamiStudio
 
                 if (e.Right)
                 {
-                    hovered = false;
+                    Hovered = false;
                     ShowContextMenu();
                 }
             }
@@ -427,7 +460,7 @@ namespace FamiStudio
 
                 if (e.Right)
                 {
-                    hovered = false;
+                    Hovered = false;
                     ShowContextMenu();
                 }
             }
@@ -454,7 +487,7 @@ namespace FamiStudio
                 var font = ChannelIndex == App.SelectedChannelIndex ? Fonts.FontMediumBold : Fonts.FontMedium;
                 var iconHeight = channelButton.Height;
 
-                c.FillRectangle(0, 0, Width, Height, hovered ? Theme.MediumGreyColor1.Transparent(dim ? 192 : 255) : Theme.DarkGreyColor2);
+                c.FillRectangle(0, 0, Width, Height, Hovered ? Theme.MediumGreyColor1.Transparent(dim ? 192 : 255) : Theme.DarkGreyColor2);
 
                 if (dim)
                     c.FillRectangle(0, 0, Width, Height, Theme.BlackColor.Transparent(80));

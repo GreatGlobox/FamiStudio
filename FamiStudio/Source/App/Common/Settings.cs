@@ -74,6 +74,7 @@ namespace FamiStudio
         public static bool ShowRegisterViewer = Platform.IsDesktop;
         public static bool DimUnsupportedChannels = true;
         public static bool UseLegacySelectionMode = false;
+        public static bool RetainPreviousSelection = false;
         public static bool UseOSDialogs;
 
         // Input section
@@ -452,6 +453,7 @@ namespace FamiStudio
             ShowRegisterViewer = ini.GetBool("UI", "ShowRegisterViewer", Platform.IsDesktop);
             DimUnsupportedChannels = ini.GetBool("UI", "DimUnsupportedChannels", true);
             UseLegacySelectionMode = ini.GetBool("UI", "UseLegacySelectionMode", false);
+            RetainPreviousSelection = ini.GetBool("UI", "RetainPreviousSelection", false);
             UseOSDialogs = ini.GetBool("UI", "UseOSDialogs", true);
 
             // Input
@@ -692,6 +694,7 @@ namespace FamiStudio
             ini.SetBool("UI", "ShowRegisterViewer", ShowRegisterViewer);
             ini.SetBool("UI", "DimUnsupportedChannels", DimUnsupportedChannels);
             ini.SetBool("UI", "UseLegacySelectionMode", UseLegacySelectionMode);
+            ini.SetBool("UI", "RetainPreviousSelection", RetainPreviousSelection);
             ini.SetBool("UI", "UseOSDialogs", UseOSDialogs);
 
             // Input
