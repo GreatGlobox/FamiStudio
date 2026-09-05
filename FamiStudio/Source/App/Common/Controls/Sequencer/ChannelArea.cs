@@ -19,14 +19,14 @@ namespace FamiStudio
 
         private Song Song => App?.SelectedSong;
 
+        private Sequencer.SequencerViewport Viewport => sequencer.Viewport;
+
         private bool ShowExpansionIcons => sequencer.ShowExpansionIcons;
         private bool HideEmptyChannels  => sequencer.HideEmptyChannels;
         private int[] ChannelToRow      => sequencer.ChannelToRow;
         private int ChannelNameSizeX    => sequencer.ChannelNameSizeX;
-        private int ChannelSizeY        => sequencer.ChannelSizeY;
         private int ContentBottomY      => sequencer.ContentBottomY;
         private int HeaderSizeY         => sequencer.HeaderSizeY;
-        private int ViewScrollY         => sequencer.ViewScrollY;
 
         internal LocalizedString MoreOptionsText => sequencer.MoreOptionsText;
 
@@ -42,8 +42,6 @@ namespace FamiStudio
                 }
             }
         }
-
-        public event Action ShyClicked;
 
         LocalizedString ShyModeTooltip;
 
@@ -98,12 +96,16 @@ namespace FamiStudio
                 var row = new ChannelRow(this, i);
 
                 row.IconClicked += App.ToggleChannelActive;
+                row.Clicked += (idx) =>
+                {
+                    if (idx != App.SelectedChannelIndex)
+                        App.SelectedChannelIndex = idx;
+                };
                 row.SoloToggled += (idx) =>
                 {
                     App.ToggleChannelSolo(idx, true);
                     MarkDirty();
                 };
-
                 row.ForceDisplayClicked += App.ToggleChannelForceDisplay;
                 row.ForceDisplaySoloToggled += (idx) =>
                 {
@@ -138,6 +140,7 @@ namespace FamiStudio
             if (rows == null || rows.Length != ChannelToRow.Length)
                 RecreateRows();
                 
+            var vp     = Viewport;
             var maxRow = -1;
 
             for (var i = 0; i < rows.Length; i++)
@@ -156,14 +159,14 @@ namespace FamiStudio
 
                 row.Visible = true;
 
-                row.Resize(Width, ChannelSizeY);
-                row.Move(0, rowIdx * ChannelSizeY - RowClipInset);
+                row.Resize(Width, vp.ChannelSizeY);
+                row.Move(0, rowIdx * vp.ChannelSizeY - RowClipInset);
             }
 
             var rowCount = maxRow + 1;
 
             rowsContainer.Visible = rowCount > 0;
-            rowsContainer.Resize(Width, rowCount * ChannelSizeY - RowClipInset);
+            rowsContainer.Resize(Width, rowCount * vp.ChannelSizeY - RowClipInset);
 
             // Only enable tick when we have zero channels visible. Used for updating the shy icon.
             var flashShy = HideEmptyChannels && !rowsContainer.Visible;
@@ -172,7 +175,7 @@ namespace FamiStudio
             if (!flashShy)
                 SetAndMarkDirty(ref forceShyOff, false);
 
-            bottomY = HeaderSizeY + rowCount * ChannelSizeY;
+            bottomY = HeaderSizeY + rowCount * vp.ChannelSizeY;
         }
 
         private void UpdateShyIcon()
@@ -270,7 +273,7 @@ namespace FamiStudio
             c.DrawLine(0, HeaderSizeY, Width, HeaderSizeY, Theme.BlackColor);
 
             if (rowsContainer.Visible)
-                c.DrawLine(0, bottomY - ViewScrollY, Width, bottomY - ViewScrollY, Theme.BlackColor);
+                c.DrawLine(0, bottomY - Viewport.ScrollY, Width, bottomY - Viewport.ScrollY, Theme.BlackColor);
 
             if (Platform.IsMobile && IsLandscape)
                 c.DrawLine(0, 0, 0, Height, Theme.BlackColor);
@@ -294,6 +297,7 @@ namespace FamiStudio
 
             public delegate void ChannelDelegate(int channelIdx);
 
+            public ChannelDelegate Clicked;
             public ChannelDelegate IconClicked;
             public ChannelDelegate SoloToggled;
             public ChannelDelegate ForceDisplayClicked;
@@ -434,6 +438,10 @@ namespace FamiStudio
             protected override void OnPointerDown(PointerEventArgs e)
             {
                 base.OnPointerDown(e);
+                
+                if (e.Left)
+                    Clicked?.Invoke(ChannelIndex);
+
                 Hovered = true;
             }
 

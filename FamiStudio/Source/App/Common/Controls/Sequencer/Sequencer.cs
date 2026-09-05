@@ -56,6 +56,8 @@ namespace FamiStudio
         int dragSelectionRowDelta = 0;
         int dragSelectionX = 0;
         int dragSeekPosition = -1;
+        int lastSelectionChannelIdx = -1;
+        int lastSelectionPatternIdx = -1;
         int selectionDragAnchorPatternIdx = -1;
         int sequencerHeightOverride = -1;
         int preferredPatternHeight = DefaultSequencerPatternHeight;
@@ -73,6 +75,8 @@ namespace FamiStudio
         bool showExpansionIcons = false;
         bool timeOnlySelection = false;
         bool hideEmptyChannels = false;
+        bool lastSelectionAddToSelection = false;
+
         bool[] channelVisible;
         int[] channelToRow;
         int[] rowToChannel;
@@ -144,6 +148,15 @@ namespace FamiStudio
         internal PatternLocation SelectionMax        => selectionMax;
         internal PatternLocation SelectionMin        => selectionMin;
 
+        internal readonly struct SequencerViewport(int scrollX, int scrollY, int channelSizeY, int visibleRowCount, float noteSizeX)
+        {
+            public readonly int   ScrollX         = scrollX;
+            public readonly int   ScrollY         = scrollY;
+            public readonly int   ChannelSizeY    = channelSizeY;
+            public readonly int   VisibleRowCount = visibleRowCount;
+            public readonly float NoteSizeX       = noteSizeX;
+        }
+
         internal bool HasSelection                => IsSelectionValid();
         internal bool IsColumnSelectionCapture    => captureOperation == CaptureOperation.SelectColumn;
         internal bool IsDragSelectionCapture      => captureOperation == CaptureOperation.DragSelection;
@@ -153,24 +166,19 @@ namespace FamiStudio
 
         internal int[] ChannelToRow                => channelToRow;
         internal int ChannelNameSizeX              => channelNameSizeX;
-        internal int ChannelSizeY                  => channelSizeY;
         internal int ContentBottomY                => height - resizeBarSizeY - ScrollBarThickness;
         internal int HeaderSizeY                   => headerSizeY;
         internal int ResizeBarTopY                 => height - resizeBarSizeY;
         internal int ScrollBarThickness            => verticalScrollBar?.ScrollBarThickness ?? 0;
-        internal int SeekFrameToDraw               => GetSeekFrameToDraw();
         internal int SelectionDragAnchorPatternIdx => selectionDragAnchorPatternIdx;
         internal int SelectionMaxPattern           => HasTimelineSelection ? selectionMax.PatternIndex : -1;
         internal int SelectionMinPattern           => HasTimelineSelection ? selectionMin.PatternIndex : -1;
-        internal int ViewScrollX                   => scrollX;
-        internal int ViewScrollY                   => scrollY;
-        internal int VisibleRowCount               => rowToChannel?.Length ?? 0;
         internal int DragSelectionPatternDelta     => dragSelectionPatternDelta;
         internal int DragSelectionRowDelta         => dragSelectionRowDelta;
         internal int DragSelectionX                => dragSelectionX;
 
-        internal float NoteSizeX                           => noteSizeX;
         internal float SelectionDragAnchorPatternXFraction => selectionDragAnchorPatternXFraction;
+        internal float SeekFrameToDraw                     => captureOperation == CaptureOperation.DragSeekBar ? dragSeekPosition : App.VisualCurrentFrame;
 
         internal bool ColumnSelectionThresholdMet    => captureOperation == CaptureOperation.SelectColumn && captureThresholdMet;
         internal bool RectangleSelectionThresholdMet => captureOperation == CaptureOperation.SelectRectangle && captureThresholdMet;
@@ -187,12 +195,17 @@ namespace FamiStudio
 
 
         internal PatternLocation HighlightLocation => highlightLocation;
+
         internal IEnumerable<PatternLocation> SelectedPatternLocations => selectedPatternLocations;
+
+        internal SequencerViewport Viewport => new(scrollX, scrollY, channelSizeY, rowToChannel?.Length ?? 0, noteSizeX);
+
         internal LocalizedString MoreOptionsText  => MoreOptionsTooltip;
         internal LocalizedString SetLoopPointText => SetLoopPointTooltip;
         internal LocalizedString PanText          => PanTooltip;
 
         private int ConstantSizeY => DefaultHeaderSizeY + ScrollBarThickness + resizeBarSizeY + 1;
+
 
         #region Localization
 
@@ -317,6 +330,16 @@ namespace FamiStudio
             var x = (int)(n * (double)noteSizeX);
             if (scroll)
                 x -= scrollX;
+            return x;
+        }
+
+        private int GetPixelForNote(double n, bool scroll = true)
+        {
+            var x = (int)Math.Round(n * noteSizeX);
+
+            if (scroll)
+                x -= scrollX;
+
             return x;
         }
 
@@ -913,11 +936,6 @@ namespace FamiStudio
             }
         }
 
-        public int GetSeekFrameToDraw()
-        {
-            return captureOperation == CaptureOperation.DragSeekBar ? dragSeekPosition : App.CurrentFrame;
-        }
-
         internal bool GetMinMaxSelectedRow(out int minSelRow, out int maxSelRow)
         {
             var minSelChannel = selectionMin.ChannelIndex;
@@ -1303,19 +1321,19 @@ namespace FamiStudio
 
         internal void HandleMouseWheel(Control control, PointerEventArgs e)
         {
-            if (allowVerticalScrolling)
-            {
-                var p = WindowToControl(control.ControlToWindow(e.Position));
-                HandleMouseWheel(p.X, e);
-
-                return;
-            }
+            int x;
 
             if (control == channelArea || control.IsInContainer(channelArea))
             {
-                var x = channelNameSizeX + (Width - channelNameSizeX) / 2;
-                HandleMouseWheel(x, e);
+                x = channelNameSizeX + (Width - channelNameSizeX) / 2;
             }
+            else
+            {
+                var p = WindowToControl(control.ControlToWindow(e.Position));
+                x = p.X;
+            }
+
+            HandleMouseWheel(x, e);
         }
 
         internal void HandleMouseHorizontalWheel(Control control, PointerEventArgs e)
@@ -1362,6 +1380,14 @@ namespace FamiStudio
 
             UpdateCursor();
 
+            if (IsPointInResizeArea(e.Y))
+            {
+                if (HandleMouseDownResize(e))
+                    MarkDirty();
+
+                return;
+            }
+
             var pan = e.Middle || (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle);
             if (pan)
             {
@@ -1369,13 +1395,6 @@ namespace FamiStudio
                 MarkDirty();
                 return;
             }
-
-            if (HandleMouseDownResize(e)) goto Handled;
-
-            return;
-
-        Handled:
-            MarkDirty();
         }
 
         internal void GotoPianoRoll(PatternLocation location)
@@ -2401,14 +2420,27 @@ namespace FamiStudio
             ScrollIfNearEdge(x, y, true, !timeOnly && CanScrollVertically());
             var addToSelection = ModifierKeys.IsControlDown || (Platform.IsMobile && Settings.RetainPreviousSelection);
 
+            var oldSelectionMin = selectionMin;
+            var oldSelectionMax = selectionMax;
+            var oldTimeOnlySelection = timeOnlySelection;
+
             if (timeOnly)
             {
                 Debug.Assert(capturePatternIdx >= 0);
-
                 var currentColumnIdx = capturePatternIdx;
 
                 if (!first)
                     GetClampedPatternForCoord(x, y, out _, out currentColumnIdx);
+
+                if (!first &&
+                    currentColumnIdx == lastSelectionPatternIdx &&
+                    addToSelection == lastSelectionAddToSelection)
+                {
+                    return;
+                }
+
+                lastSelectionPatternIdx = currentColumnIdx;
+                lastSelectionAddToSelection = addToSelection;
 
                 var minPatternIdx = Math.Min(currentColumnIdx, capturePatternIdx);
                 var maxPatternIdx = Math.Max(currentColumnIdx, capturePatternIdx);
@@ -2496,6 +2528,12 @@ namespace FamiStudio
 
             if (!first)
                 GetClampedPatternForCoord(x, y, out currentChannelIdx, out currentPatternIdx);
+
+            if (!first && currentChannelIdx == lastSelectionChannelIdx && currentPatternIdx == lastSelectionPatternIdx)
+                return;
+
+            lastSelectionChannelIdx = currentChannelIdx;
+            lastSelectionPatternIdx = currentPatternIdx;
 
             var marqueeMinChannel = Math.Min(currentChannelIdx, captureChannelIdx);
             var marqueeMaxChannel = Math.Max(currentChannelIdx, captureChannelIdx);
@@ -2721,13 +2759,11 @@ namespace FamiStudio
             var x = e.X;
             var y = e.Y;
 
-            bool middle = e.Middle || (e.Left && ModifierKeys.IsAltDown && Settings.AltLeftForMiddle);
-
             base.OnPointerMove(e);
 
             UpdateCaptureOperation(x, y);
 
-            if (middle)
+            if (panning)
                 DoScroll(x - mouseLastX, y - mouseLastY);
             else if (e.Right && selectedPatternRefCounts.Count > 0 && (captureOperation == CaptureOperation.SelectRectangle || captureOperation == CaptureOperation.SelectColumn))
                 selectedPatternRefCounts.Clear();
@@ -2940,7 +2976,7 @@ namespace FamiStudio
             if (percent == float.MinValue)
                 percent = Settings.FollowPercent;
 
-            var seekX = GetPixelForNote(App.CurrentFrame);
+            var seekX = GetPixelForNote(SeekFrameToDraw);
             var minX = 0;
             var maxX = (int)((width - channelNameSizeX) * percent);
 
@@ -2952,7 +2988,7 @@ namespace FamiStudio
 
             ClampScroll();
 
-            seekX = GetPixelForNote(App.CurrentFrame);
+            seekX = GetPixelForNote(SeekFrameToDraw);
             return seekX == maxX;
         }
 
@@ -2961,7 +2997,8 @@ namespace FamiStudio
             continuouslyFollowing = false;
 
             if ((App.IsPlaying || force) && App.FollowModeEnabled && Settings.FollowSync != Settings.FollowSyncPianoRoll && !panning && 
-                captureOperation == CaptureOperation.None && !window.IsAsyncDialogInProgress && !window.IsOutOfProcessDialogInProgress)
+                (captureOperation == CaptureOperation.None || captureOperation == CaptureOperation.ResizeSequencer) && 
+                !window.IsAsyncDialogInProgress && !window.IsOutOfProcessDialogInProgress)
             {
                 var frame = App.CurrentFrame;
                 var seekX = GetPixelForNote(App.CurrentFrame);

@@ -42,6 +42,7 @@ namespace FamiStudio
         private int previewDPCMSampleRate = 44100;
         private int lastRecordingKeyDown = -1;
         private int lastPlayPosition = 0;
+        private int lastVisualActualFrame = -1;
         private bool previewDPCMIsSource = false;
         private bool metronome = false;
         private bool palPlayback = false;
@@ -50,6 +51,8 @@ namespace FamiStudio
         private bool qwertyPiano = false;
         private bool followMode = false;
         private bool suspended = false;
+        private bool visualCurrentFrameValid = false;
+        private float visualCurrentFrame = 0.0f;
         private float stopInstrumentTimer = 0.0f;
         private short[] metronomeSound;
         private ConcurrentQueue<Tuple<int, bool>> midiNoteQueue = new ConcurrentQueue<Tuple<int, bool>>();
@@ -75,6 +78,7 @@ namespace FamiStudio
         public int   BaseRecordingOctave => baseRecordingOctave;
         public bool  MobilePianoVisible { get => window.MobilePianoVisible; set => window.MobilePianoVisible = value; }
         public int   CurrentFrame => lastTickCurrentFrame >= 0 ? lastTickCurrentFrame : (songPlayer != null ? songPlayer.PlayPosition : 0);
+        public float VisualCurrentFrame => IsPlaying && !IsSeeking ? visualCurrentFrame : CurrentFrame;
         public long  ChannelMask { get => songPlayer != null ? songPlayer.ChannelMask : -1; set => songPlayer.ChannelMask = value; }
         public int   PlayRate { get => songPlayer != null ? songPlayer.PlayRate : 1; set { songPlayer.PlayRate = value; } }
         public float AverageTickRate => averageTickRateMs;
@@ -1563,6 +1567,55 @@ namespace FamiStudio
             window.Text = title;
         }
 
+        private float GetVisualPlaybackRateScale(int frame)
+        {
+            if (song == null || !song.UsesFamiStudioTempo)
+                return 1.0f;
+
+            var location = NoteLocation.FromAbsoluteNoteIndex(song, frame);
+
+            if (!location.IsInSong(song))
+                return 1.0f;
+
+            var groove = song.GetPatternGroove(location.PatternIndex);
+            var noteLength = song.GetPatternNoteLength(location.PatternIndex);
+
+            return noteLength * groove.Length / (float)Utils.Sum(groove);
+        }
+
+        private void UpdateVisualCurrentFrame(float delta)
+        {
+            var actualFrame = CurrentFrame;
+            if (!IsPlaying || IsSeeking)
+            {
+                visualCurrentFrame      = actualFrame;
+                visualCurrentFrameValid = false;
+                lastVisualActualFrame   = actualFrame;
+                return;
+            }
+
+            if (!visualCurrentFrameValid)
+            {
+                visualCurrentFrame      = actualFrame;
+                visualCurrentFrameValid = true;
+                lastVisualActualFrame   = actualFrame;
+                return;
+            }
+
+            var frameRate = PalPlayback ? NesApu.FpsPAL : NesApu.FpsNTSC;
+            frameRate /= PlayRate;
+
+            var rateScale = GetVisualPlaybackRateScale(actualFrame);
+            var realDelta = actualFrame - lastVisualActualFrame;
+
+            visualCurrentFrame += delta * frameRate * rateScale;
+
+            if (realDelta < 0 || realDelta > 3)
+                visualCurrentFrame = actualFrame;
+
+            lastVisualActualFrame = actualFrame;
+        }
+
         public void ShowInstrumentError(Channel channel, bool beep)
         {
             var message = IncompatibleInstrumentError.Value;
@@ -2303,6 +2356,15 @@ namespace FamiStudio
             return PianoRoll.GetViewRange(ref minNoteIdx, ref maxNoteIdx, ref channelIndex);
         }
 
+        public bool GetPianoRollViewRange(out float minNoteIdx, out float maxNoteIdx, out int channelIndex)
+        {
+            minNoteIdx   = -1000000.0f;
+            maxNoteIdx   = -1000000.0f;
+            channelIndex = -1000000;
+
+            return PianoRoll.GetViewRange(ref minNoteIdx, ref maxNoteIdx, ref channelIndex);
+        }
+
         private void MarkEverythingDirty()
         {
             ToolBar.MarkDirty();
@@ -2448,6 +2510,7 @@ namespace FamiStudio
             lastTickCurrentFrame = IsPlaying ? songPlayer.PlayPosition : -1;
             averageTickRateMs = Utils.Lerp(averageTickRateMs, deltaTime * 1000.0f, 0.01f);
 
+            UpdateVisualCurrentFrame(deltaTime);
             ProcessAudioDeviceChanges();
             ProcessQueuedMidiNotes();
             ConditionalMarkControlsDirty();

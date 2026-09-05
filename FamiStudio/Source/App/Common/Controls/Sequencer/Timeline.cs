@@ -2,7 +2,7 @@ using System;
 
 namespace FamiStudio
 {
-    internal class Timeline : Container
+    internal class Timeline : Control
     {
         const int DefaultHeaderIconPosX = 3;
         const int DefaultHeaderIconPosY = 3;
@@ -36,6 +36,8 @@ namespace FamiStudio
         private Color SelectedPatternVisibleColor => sequencer.SelectedPatternVisibleColor;
         private Color SeekBarColor                => sequencer.SeekBarColor;
 
+        private Sequencer.SequencerViewport Viewport => sequencer.Viewport;
+
         private bool HasTimelineSelection        => sequencer.HasTimelineSelection;
         private bool LegacySelectMode            => sequencer.LegacySelectMode;
         private bool IsResizing                  => sequencer.IsResizing;
@@ -44,12 +46,10 @@ namespace FamiStudio
 
         private int ChannelNameSizeX    => sequencer.ChannelNameSizeX;
         private int HeaderSizeY         => sequencer.HeaderSizeY;
-        private int SeekFrameToDraw     => sequencer.SeekFrameToDraw;
         private int SelectionMinPattern => sequencer.SelectionMinPattern;
         private int SelectionMaxPattern => sequencer.SelectionMaxPattern;
-        private int ViewScrollX         => sequencer.ViewScrollX;
 
-        private float NoteSizeX => sequencer.NoteSizeX;
+        private float SeekFrameToDraw  => sequencer.SeekFrameToDraw;
 
         internal Timeline(Sequencer sequencer)
         {
@@ -95,15 +95,15 @@ namespace FamiStudio
             }
         }
 
-        private int GetPixelForNote(int note)
+        private int GetPixelForNote(float note)
         {
-            return (int)(note * (double)NoteSizeX) - ViewScrollX;
+            return (int)Math.Round(note * Viewport.NoteSizeX) - Viewport.ScrollX;
         }
 
         private int GetNoteForPixel(int x)
         {
-            x += ViewScrollX;
-            return (int)(x / (double)NoteSizeX);
+            x += Viewport.ScrollX;
+            return (int)(x / (double)Viewport.NoteSizeX);
         }
 
         private int GetPatternIndexForCoord(int x)
@@ -286,17 +286,20 @@ namespace FamiStudio
         {
             base.OnResize(e);
 
+            var headerSizeY = Height - 1;
+
             seekGeometry = new float[]
             {
-                -HeaderSizeY / 2, 1,
-                0, HeaderSizeY - 2,
-                HeaderSizeY / 2, 1
+                -headerSizeY / 2, 1,
+                0, headerSizeY - 2,
+                headerSizeY / 2, 1
             };
         }
 
         protected override void OnRender(Graphics g)
         {
-            if (Song == null || NoteSizeX <= 0.0f)
+            var vp = Viewport;
+            if (Song == null || vp.NoteSizeX <= 0.0f)
                 return;
 
             var minVisibleNoteIdx = Math.Max(GetNoteForPixel(0), 0);
@@ -313,7 +316,7 @@ namespace FamiStudio
             for (int i = minVisiblePattern; i < maxVisiblePattern; i++)
             {
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                var sx = (int)(Song.GetPatternLength(i) * (double)NoteSizeX);
+                var sx = (int)(Song.GetPatternLength(i) * (double)vp.NoteSizeX);
                 var color = !IsResizing && i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
 
                 b.FillRectangle(px, 0, px + sx, HeaderSizeY, color);
@@ -337,7 +340,7 @@ namespace FamiStudio
                             continue;
 
                         var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                        var sx = (int)(Song.GetPatternLength(i) * (double)NoteSizeX);
+                        var sx = (int)(Song.GetPatternLength(i) * (double)vp.NoteSizeX);
 
                         c.FillRectangle(px, 0, px + sx, HeaderSizeY, SelectedPatternVisibleColor);
                         c.DrawRectangle(px, 1, px + sx, HeaderSizeY - 1, Theme.WhiteColor, OutlineThickness, true);
@@ -359,7 +362,7 @@ namespace FamiStudio
             {
                 var patternLen = Song.GetPatternLength(i);
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
-                var sx = (int)(patternLen * (double)NoteSizeX);
+                var sx = (int)(patternLen * (double)vp.NoteSizeX);
 
                 if (sx > 0)
                 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace FamiStudio
 {
-    internal class PatternArea : Container
+    internal class PatternArea : Control
     {
         const int DefaultPatternHeaderSizeY = 13;
         const int DefaultPatternNamePosX    = 2;
@@ -25,20 +25,17 @@ namespace FamiStudio
 
         private int PatternHeaderSizeY            => patternHeaderSizeY;
         private int PatternNamePosX               => patternNamePosX;
-        private int ViewScrollX                   => sequencer.ViewScrollX;
-        private int ViewScrollY                   => sequencer.ViewScrollY;
-        private int ChannelSizeY                  => sequencer.ChannelSizeY;
-        private int VisibleRowCount               => sequencer.VisibleRowCount;
         private int SelectionDragAnchorPatternIdx => sequencer.SelectionDragAnchorPatternIdx;
         private int DragSelectionPatternDelta     => sequencer.DragSelectionPatternDelta;
         private int DragSelectionRowDelta         => sequencer.DragSelectionRowDelta;
         private int DragSelectionX                => sequencer.DragSelectionX;
 
-        private float NoteSizeX                           => sequencer.NoteSizeX;
         private float SelectionDragAnchorPatternXFraction => sequencer.SelectionDragAnchorPatternXFraction;
 
         private bool LegacySelectMode => sequencer.LegacySelectMode;
         private bool HasSelection     => sequencer.HasSelection;
+
+        private Sequencer.SequencerViewport Viewport => sequencer.Viewport;
 
         private PatternLocation SelectionMin        => sequencer.SelectionMin;
         private PatternLocation SelectionMax        => sequencer.SelectionMax;
@@ -105,7 +102,7 @@ namespace FamiStudio
         private void UpdateRenderCoords()
         {
             // Shave a couple pixels when the size is getting too small.
-            patternHeaderSizeY = DpiScaling.ScaleForFont(ChannelSizeY < DpiScaling.ScaleForWindow(24) ? DefaultPatternHeaderSizeY - 2 : DefaultPatternHeaderSizeY);
+            patternHeaderSizeY = DpiScaling.ScaleForFont(Viewport.ChannelSizeY < DpiScaling.ScaleForWindow(24) ? DefaultPatternHeaderSizeY - 2 : DefaultPatternHeaderSizeY);
             patternNamePosX    = DpiScaling.ScaleForWindow(DefaultPatternNamePosX);
         }
 
@@ -164,18 +161,28 @@ namespace FamiStudio
 
         private int GetPixelForNote(int note, bool scroll = true)
         {
-            var x = (int)(note * (double)NoteSizeX);
+            var x = (int)(note * (double)Viewport.NoteSizeX);
 
             if (scroll)
-                x -= ViewScrollX;
+                x -= Viewport.ScrollX;
+
+            return x;
+        }
+
+        private int GetPixelForNote(float note, bool scroll = true)
+        {
+            var x = (int)Math.Round(note * Viewport.NoteSizeX);
+
+            if (scroll)
+                x -= Viewport.ScrollX;
 
             return x;
         }
 
         private int GetNoteForPixel(int x)
         {
-            x += ViewScrollX;
-            return (int)(x / (double)NoteSizeX);
+            x += Viewport.ScrollX;
+            return (int)(x / (double)Viewport.NoteSizeX);
         }
 
         private int GetPatternIndexForCoord(int x)
@@ -347,9 +354,9 @@ namespace FamiStudio
             UpdateToolTip(e);
 
             var patternIdx = GetPatternIndexForCoord(e.X);
-            var rowIdx = (e.Y + ViewScrollY) / ChannelSizeY;
+            var rowIdx = (e.Y + Viewport.ScrollY) / Viewport.ChannelSizeY;
 
-            if (rowIdx < 0 || rowIdx >= VisibleRowCount)
+            if (rowIdx < 0 || rowIdx >= Viewport.VisibleRowCount)
                 rowIdx = -1;
 
             sequencer.SetPatternAreaHover(rowIdx, patternIdx);
@@ -545,7 +552,9 @@ namespace FamiStudio
 
         protected override void OnRender(Graphics g)
         {
-            if (Song == null || NoteSizeX <= 0.0f)
+            var vp = Viewport;
+
+            if (Song == null || vp.NoteSizeX <= 0.0f)
                 return;
 
             var b = g.BackgroundCommandList;
@@ -578,8 +587,8 @@ namespace FamiStudio
                 if (minRow >= 0 && maxRow >= 0)
                 {
                     c.FillRectangle(
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(sequencer.CaptureSelectionMin.PatternIndex)), ChannelSizeY * minRow - ViewScrollY,
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(sequencer.CaptureSelectionMax.PatternIndex + 1, Song.Length))), ChannelSizeY * (maxRow + 1) - ViewScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(sequencer.CaptureSelectionMin.PatternIndex)), vp.ChannelSizeY * minRow - vp.ScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(sequencer.CaptureSelectionMax.PatternIndex + 1, Song.Length))), vp.ChannelSizeY * (maxRow + 1) - vp.ScrollY,
                         SelectionColor);
                 }
             }
@@ -608,8 +617,8 @@ namespace FamiStudio
                 else if (sequencer.GetMinMaxSelectedRow(out var minSelRow, out var maxSelRow))
                 {
                     c.FillRectangle(
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMin.PatternIndex,     Song.Length))), ChannelSizeY *  minSelRow      - ViewScrollY,
-                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMax.PatternIndex + 1, Song.Length))), ChannelSizeY * (maxSelRow + 1) - ViewScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMin.PatternIndex,     Song.Length))), vp.ChannelSizeY *  minSelRow      - vp.ScrollY,
+                        GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(Math.Min(SelectionMax.PatternIndex + 1, Song.Length))), vp.ChannelSizeY * (maxSelRow + 1) - vp.ScrollY,
                         SelectionColor);
                 }
             }
@@ -621,14 +630,12 @@ namespace FamiStudio
                 c.DrawLine(px, 0, px, Height, Theme.BlackColor);
             }
 
-            c.PushTranslation(0, -ViewScrollY);
+            c.PushTranslation(0, -vp.ScrollY);
 
             // Horizontal lines
-            for (int i = 0, y = 0; i <= VisibleRowCount; i++, y += ChannelSizeY)
+            for (int i = 0, y = 0; i <= vp.VisibleRowCount; i++, y += vp.ChannelSizeY)
                 c.DrawLine(0, y, Width, y, Theme.BlackColor);
 
-            // TODO : This is really bad, since all the logic is in the rendering code. Make
-            // this more like any other capture op eventually.
             var dragCapture = IsDragSelectionCapture;
             if (dragCapture)
             {
@@ -659,10 +666,10 @@ namespace FamiStudio
                         {
                             for (int j = minSelRow + rowIdxDelta; j <= maxSelRow + rowIdxDelta; j++)
                             {
-                                if (j < 0 || j >= VisibleRowCount)
+                                if (j < 0 || j >= vp.VisibleRowCount)
                                     continue;
 
-                                var y = j * ChannelSizeY;
+                                var y = j * vp.ChannelSizeY;
 
                                 // Center.
                                 var patternSizeX       = GetPixelForNote(Song.GetPatternLength(patternIdx), false);
@@ -670,11 +677,11 @@ namespace FamiStudio
                                 var anchorOffsetRightX = (int)(patternSizeX * (1.0f - SelectionDragAnchorPatternXFraction));
 
                                 c.PushTranslation(dragX, y);
-                                c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+                                c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, vp.ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
 
                                 if (bmpCopy != null)
                                 {
-                                    c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                    c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
                                 }
 
                                 // Left side.
@@ -683,11 +690,11 @@ namespace FamiStudio
                                     patternSizeX = GetPixelForNote(Song.GetPatternLength(p), false);
                                     anchorOffsetLeftX += patternSizeX;
 
-                                    c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+                                    c.FillAndDrawRectangle(-anchorOffsetLeftX, 0, -anchorOffsetLeftX + patternSizeX, vp.ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
 
                                     if (bmpCopy != null)
                                     {
-                                        c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                        c.DrawTextureAtlas(bmpCopy, -anchorOffsetLeftX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
                                     }
                                 }
 
@@ -696,11 +703,11 @@ namespace FamiStudio
                                 {
                                     patternSizeX = GetPixelForNote(Song.GetPatternLength(p), false);
 
-                                    c.FillAndDrawRectangle(anchorOffsetRightX, 0, anchorOffsetRightX + patternSizeX, ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+                                    c.FillAndDrawRectangle(anchorOffsetRightX, 0, anchorOffsetRightX + patternSizeX, vp.ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
 
                                     if (bmpCopy != null)
                                     {
-                                        c.DrawTextureAtlas(bmpCopy, anchorOffsetRightX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                        c.DrawTextureAtlas(bmpCopy, anchorOffsetRightX + patternSizeX / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
                                     }
 
                                     anchorOffsetRightX += patternSizeX;
@@ -730,7 +737,7 @@ namespace FamiStudio
                             var destPattern = location.PatternIndex + patternIdxDelta;
 
                             if (destRow < 0 ||
-                                destRow >= VisibleRowCount ||
+                                destRow >= vp.VisibleRowCount ||
                                 destPattern < 0 ||
                                 destPattern >= Song.Length)
                             {
@@ -744,13 +751,13 @@ namespace FamiStudio
                                 Song.GetPatternLength(destPattern), false);
 
                             var x = anchorX + (destGridX - anchorGridX);
-                            var y = destRow * ChannelSizeY;
+                            var y = destRow * vp.ChannelSizeY;
 
-                            c.FillAndDrawRectangle(x, y, x + patternSizeX, y + ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
+                            c.FillAndDrawRectangle(x, y, x + patternSizeX, y + vp.ChannelSizeY, SelectedPatternVisibleColor, Theme.BlackColor);
 
                             if (bmpCopy != null)
                             {
-                                c.DrawTextureAtlas(bmpCopy, x + patternSizeX / 2 - bmpSize / 2, y + PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
+                                c.DrawTextureAtlas(bmpCopy, x + patternSizeX / 2 - bmpSize / 2, y + PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2, bitmapScale, Theme.LightGreyColor1);
                             }
                         }
                     }
@@ -758,7 +765,7 @@ namespace FamiStudio
             }
 
             // Patterns
-            var patternCacheSizeY = ChannelSizeY - PatternHeaderSizeY - 1;
+            var patternCacheSizeY = vp.ChannelSizeY - PatternHeaderSizeY - 1;
             patternCache.Update(patternCacheSizeY);
 
             for (int pi = minVisiblePattern; pi < maxVisiblePattern; pi++)
@@ -786,7 +793,7 @@ namespace FamiStudio
 
                             c.PushTranslation(0, py);
                             c.FillRectangleGradient(1, 1, sx, PatternHeaderSizeY, pattern.Color, pattern.Color.Scaled(0.8f), true, PatternHeaderSizeY);
-                            c.FillRectangle(1, PatternHeaderSizeY, sx, ChannelSizeY, Color.FromArgb(75, pattern.Color));
+                            c.FillRectangle(1, PatternHeaderSizeY, sx, vp.ChannelSizeY, Color.FromArgb(75, pattern.Color));
                             c.DrawLine(0, PatternHeaderSizeY, sx, PatternHeaderSizeY, newSelection ? Theme.WhiteColor : Theme.BlackColor);
                             c.DrawTexture(bmp, 1.0f, 1.0f + PatternHeaderSizeY, sx - 1, patternCacheSizeY, u0, v0, u1, v1);
 
@@ -795,10 +802,10 @@ namespace FamiStudio
                                 if (!LegacySelectMode)
                                 {
                                     c.DrawText(pattern.Name, Fonts.FontSmallBold, PatternNamePosX + 1, 1, Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - PatternNamePosX, PatternHeaderSizeY + 1);
-                                    f.FillRectangle(1, PatternHeaderSizeY, sx, ChannelSizeY, HighlightedPatternColor);
+                                    f.FillRectangle(1, PatternHeaderSizeY, sx, vp.ChannelSizeY, HighlightedPatternColor);
                                 }
                                     
-                                f.DrawRectangle(0, 0, sx, ChannelSizeY, LegacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor, 3, true, true);
+                                f.DrawRectangle(0, 0, sx, vp.ChannelSizeY, LegacySelectMode ? Theme.LightGreyColor1 : Theme.WhiteColor, 3, true, true);
                             }
 
                             c.DrawText(pattern.Name, newSelection ? Fonts.FontSmallBold : Fonts.FontSmall, PatternNamePosX, 0, newSelection ? Theme.WhiteColor : Theme.BlackColor, TextFlags.Left | TextFlags.Middle | TextFlags.Clip, sx - PatternNamePosX, PatternHeaderSizeY + 1);
@@ -811,18 +818,18 @@ namespace FamiStudio
                                 var bmpSize = DpiScaling.ScaleCustom(bmpMenuInstance.ElementSize.Width, scale);
 
                                 f.PushTranslation(0, py);
-                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2 + scale, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2 + scale, scale, Theme.BlackColor);
-                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + ChannelSizeY / 2 - bmpSize / 2, scale, Theme.WhiteColor);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2 + scale, PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2 + scale, scale, Theme.BlackColor);
+                                f.DrawTextureAtlas(bmpMenuInstance, sx / 2 - bmpSize / 2, PatternHeaderSizeY / 2 + vp.ChannelSizeY / 2 - bmpSize / 2, scale, Theme.WhiteColor);
                                 f.PopTransform();
                             }
                         }
 
                         if (Platform.IsMobile && HighlightLocation == location)
                         {
-                            c.DrawRectangle(0, py, sx, py + ChannelSizeY, Theme.WhiteColor, 3, true, true);
+                            c.DrawRectangle(0, py, sx, py + vp.ChannelSizeY, Theme.WhiteColor, 3, true, true);
                         }
 
-                        py += ChannelSizeY;
+                        py += vp.ChannelSizeY;
                     }
                 }
 
@@ -830,13 +837,16 @@ namespace FamiStudio
             }
 
             // Piano roll view rect
-            if (App.GetPianoRollViewRange(out var pianoRollMinNoteIdx, out var pianoRollMaxNoteIdx, out var pianoRollChannelIndex))
+            if (App.GetPianoRollViewRange(out float pianoRollMinNoteIdx, out float pianoRollMaxNoteIdx, out var pianoRollChannelIndex))
             {
                 var rowIdx = GetRowForChannel(pianoRollChannelIndex);
                 if (rowIdx >= 0)
                 {
-                    c.PushTranslation(GetPixelForNote(pianoRollMinNoteIdx), rowIdx * ChannelSizeY);
-                    c.DrawRectangle(1, PatternHeaderSizeY + 1, GetPixelForNote(pianoRollMaxNoteIdx - pianoRollMinNoteIdx, false) - 1, ChannelSizeY - 1, Theme.LightGreyColor2);
+                    var x0 = GetPixelForNote(pianoRollMinNoteIdx);
+                    var x1 = GetPixelForNote(pianoRollMaxNoteIdx);
+
+                    c.PushTranslation(x0, rowIdx * vp.ChannelSizeY);
+                    c.DrawRectangle(1, PatternHeaderSizeY + 1, x1 - x0 - 1, vp.ChannelSizeY - 1, Theme.LightGreyColor2);
                     c.PopTransform();
                 }
             }
