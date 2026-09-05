@@ -159,7 +159,9 @@
     <Compile Include="Source\App\Common\Controls\Slider.cs" />
     <Compile Include="Source\App\Common\Controls\TextBox.cs" />
     <Compile Include="Source\App\Common\Controls\Toast.cs" />
+    <Compile Include="Source\App\Common\Controls\PianoRoll\Piano.cs" />
     <Compile Include="Source\App\Common\Controls\PianoRoll\PianoRoll.cs" />
+    <Compile Include="Source\App\Common\Controls\PianoRoll\PianoRollTimeline.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\ParamCheckBox.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\ParamControl.cs" />
     <Compile Include="Source\App\Common\Controls\ProjectExplorer\ParamCustomDraw.cs" />
