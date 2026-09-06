@@ -2390,6 +2390,9 @@ namespace FamiStudio
 
         private void ScrollIfNearEdge(int x, int y, bool scrollHorizontal = true, bool scrollVertical = false)
         {
+            var oldScrollX = scrollX;
+            var oldScrollY = scrollY;
+
             if (scrollHorizontal)
             {
                 int posMinX = 0;
@@ -2399,7 +2402,6 @@ namespace FamiStudio
 
                 scrollX += Utils.ComputeScrollAmount(x, posMinX, marginMinX, App.AverageTickRate * ScrollSpeedFactor, true);
                 scrollX += Utils.ComputeScrollAmount(x, posMaxX, marginMaxX, App.AverageTickRate * ScrollSpeedFactor, false);
-                ClampScroll();
             }
 
             if (scrollVertical)
@@ -2411,8 +2413,12 @@ namespace FamiStudio
 
                 scrollY += Utils.ComputeScrollAmount(y, posMinY, marginMinY, App.AverageTickRate * ScrollSpeedFactor, true);
                 scrollY += Utils.ComputeScrollAmount(y, posMaxY, marginMaxY, App.AverageTickRate * ScrollSpeedFactor, false);
-                ClampScroll();
             }
+
+            ClampScroll();
+
+            if (scrollX != oldScrollX || scrollY != oldScrollY)
+                MarkDirty();
         }
 
         private void UpdateSelection(int x, int y, bool timeOnly, bool first = false)
