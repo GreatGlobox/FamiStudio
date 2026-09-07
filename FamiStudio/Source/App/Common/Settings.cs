@@ -249,7 +249,8 @@ namespace FamiStudio
         public static bool SnapEffects = false;
 
         // Sequencer stuff
-        public static int SequencerHeight = 228;
+        public const int DefaultSequencerHeight = 242;
+        public static int SequencerHeight = DefaultSequencerHeight;
 
         public delegate void EmptyDelegate();
         public static event EmptyDelegate KeyboardShortcutsChanged;

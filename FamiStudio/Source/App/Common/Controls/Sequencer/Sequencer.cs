@@ -9,7 +9,7 @@ namespace FamiStudio
     {
         const int DefaultChannelNameSizeX          = Platform.IsMobile ? 68 : 94;
         const int DefaultHeaderSizeY               = 17;
-        const int DefaultScrollableSequencerHeight = 300;
+        const int DefaultScrollableSequencerHeight = Settings.DefaultSequencerHeight;
         const int DefaultSequencerPatternHeight    = 44;
         const int ResizeBarHeight                  = 5;
 
@@ -450,7 +450,7 @@ namespace FamiStudio
                 var minHeight = (int)Math.Round(ParentWindow.Height / DpiScaling.Window * MinSequencerHeight);
                 var maxHeight = (int)Math.Round(ParentWindow.Height / DpiScaling.Window * MaxSequencerHeight);
 
-                var sequencerHeight = sequencerHeightOverride >= 0 ? sequencerHeightOverride : Settings.SequencerHeight > 0 ? (int)Math.Round(Settings.SequencerHeight / DpiScaling.Window) : DefaultScrollableSequencerHeight;
+                var sequencerHeight = sequencerHeightOverride >= 0 ? sequencerHeightOverride : DefaultScrollableSequencerHeight;
                 sequencerHeight = Utils.Clamp(sequencerHeight, minHeight, maxHeight);
 
                 var contentHeight = sequencerHeight - ConstantSizeY;
@@ -463,8 +463,8 @@ namespace FamiStudio
 
         public void ApplySettings()
         {
-            legacySelectMode          = Settings.UseLegacySelectionMode;
-            sequencerHeightOverride   = -1;
+            legacySelectMode        = Settings.UseLegacySelectionMode;
+            sequencerHeightOverride = Settings.SequencerHeight;
 
             UpdateRenderCoords();
             UpdateScrollBarControls();
@@ -474,7 +474,7 @@ namespace FamiStudio
         public void SaveSettings()
         {
             if (Settings.AllowSequencerVerticalScroll)
-                Settings.SequencerHeight = height;
+                Settings.SequencerHeight = sequencerHeightOverride;
         }
 
         public void LayoutChanged()
@@ -2187,6 +2187,11 @@ namespace FamiStudio
 
             switch (operation)
             {
+                case CaptureOperation.SelectRectangle:
+                case CaptureOperation.SelectColumn:
+                    UpdateSelectedPatternRefCounts();
+                    break;
+
                 case CaptureOperation.DragSelection:
                     EndDragSelection(x, y);
                     break;
@@ -2199,20 +2204,11 @@ namespace FamiStudio
                 case CaptureOperation.MobileZoom:
                     canFling = true;
                     break;
-
-                case CaptureOperation.ResizeSequencer:
-                    SaveSettings();
-                    break;
             }
 
             panning = false;
             captureOperation = CaptureOperation.None;
             ReleasePointer();
-
-            if ((operation == CaptureOperation.SelectRectangle || operation == CaptureOperation.SelectColumn) && IsSelectionValid())
-            {
-                UpdateSelectedPatternRefCounts();
-            }
 
             MarkDirty();
             UpdateCursor();
@@ -2698,9 +2694,6 @@ namespace FamiStudio
                 return;
 
             EndCaptureOperation(x, y);
-
-            if (IsSelectionValid())
-                UpdateSelectedPatternRefCounts();
         }
 
         private void UpdateCaptureOperation(int x, int y, float scale = 1.0f, bool realTime = false)
