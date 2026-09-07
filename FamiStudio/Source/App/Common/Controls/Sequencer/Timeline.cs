@@ -40,7 +40,6 @@ namespace FamiStudio
 
         private bool HasTimelineSelection        => sequencer.HasTimelineSelection;
         private bool LegacySelectMode            => sequencer.LegacySelectMode;
-        private bool IsResizing                  => sequencer.IsResizing;
         private bool IsColumnSelectionCapture    => sequencer.IsColumnSelectionCapture;
         private bool ColumnSelectionThresholdMet => sequencer.ColumnSelectionThresholdMet;
 
@@ -317,7 +316,7 @@ namespace FamiStudio
             {
                 var px = GetPixelForNote(Song.GetPatternStartAbsoluteNoteIndex(i));
                 var sx = (int)(Song.GetPatternLength(i) * (double)vp.NoteSizeX);
-                var color = !IsResizing && i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
+                var color = i == hoverPattern ? Theme.MediumGreyColor1: ((i & 1) == 0 ? Theme.DarkGreyColor4 : Theme.DarkGreyColor2);
 
                 b.FillRectangle(px, 0, px + sx, HeaderSizeY, color);
             }
